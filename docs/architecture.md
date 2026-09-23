@@ -2,7 +2,28 @@
 
 ## System context
 
-Agent Control Plane consists of two applications with different trust and execution boundaries.
+Agent Control Plane is the product boundary. The current implementation consists of a hosted Control Plane application and a local client with different trust and execution boundaries.
+
+The first delivered module is the Context Hub. Capability Registry and Policy & Identity support it. Agent Operations is a future module and is not part of the MVP.
+
+```text
+Agent Control Plane
+├── Context Hub                 # current MVP
+├── Capability Registry         # current MVP
+├── Policy & Identity           # current MVP
+└── Agent Operations            # future
+    ├── Agent Registry
+    ├── Run Coordination
+    ├── Runner Management
+    └── Scheduling
+
+Execution Plane                 # separate trust boundary
+├── local ctx and coding agents
+├── CI runners
+└── future isolated hosted runners
+```
+
+The Control Plane owns desired state, policy, assignments, and status. It does not execute untrusted project workloads inside its API process.
 
 ### Context Hub
 
@@ -24,7 +45,8 @@ The `ctx` client runs on the computer where work happens. It provides a CLI and 
 └────────────────────┼────────────────────────────┘
                      │ REST/JSON over HTTPS
 ┌────────────────────▼────────────────────────────┐
-│ Context Hub                                     │
+│ Agent Control Plane                             │
+│ Context Hub / Capability / Governance           │
 │                                                 │
 │ inbound adapters -> application -> domain       │
 │                              ^                  │
@@ -67,6 +89,10 @@ The domain must not import HTTP, MCP, PostgreSQL, AWS, filesystem, or vendor-spe
 
 The modules are logical boundaries inside one deployable application, not microservices.
 
+### Context Hub
+
+Context Hub is the first product module. It contains work continuity, knowledge, observations, and context assembly. It remains a passive context module even if Agent Operations is added later.
+
 ### Work continuity
 
 Owns projects, tasks, checkpoints, and handoffs. It answers what is being done, what changed, and what should happen next.
@@ -86,6 +112,10 @@ Owns spaces, principals, tokens, access scopes, sync policies, and audit events.
 ### Context assembly
 
 Builds a bounded `ContextPack` from the other modules. A context pack is an application response, not a domain entity or a permanent copy of all source data.
+
+### Agent Operations
+
+Reserved as a future product module for agent registration, run coordination, runner management, and scheduling. It has no code or interfaces in the MVP. When introduced, workload execution must occur in a separate Execution Plane rather than in the Hub API process.
 
 ## Application use cases
 

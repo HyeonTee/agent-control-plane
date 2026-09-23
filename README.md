@@ -1,8 +1,8 @@
 # Agent Control Plane
 
-Vendor-neutral personal context hub for continuing work across computers, sessions, and AI coding agents.
+Vendor-neutral control plane for agent context, capabilities, policies, and future execution coordination.
 
-The system does not give an agent memory. It stores enough durable, versioned context for a new agent session to reconstruct the current state of work.
+The first module is a Context Hub. It does not give an agent memory; it stores enough durable, versioned context for a new agent session to reconstruct the current state of work.
 
 ## Why
 
@@ -14,11 +14,13 @@ Coding work is increasingly distributed across multiple computers and agents suc
 - which skills and workflows should be used;
 - what should happen next.
 
-Agent Control Plane provides one user-owned place from which those agents can pull the same context and to which they can publish checkpoints and handoffs.
+Agent Control Plane provides one user-owned platform from which those agents can pull the same context and capabilities and to which they can publish checkpoints and handoffs.
 
 ## Product boundary
 
-The hosted service is a passive context registry. It stores and serves:
+Agent Control Plane is the product boundary. Its modules may eventually manage context, capabilities, policies, agent registration, and execution coordination.
+
+The current MVP implements only the Context Hub and supporting registries. They store and serve:
 
 - projects, tasks, checkpoints, and handoffs;
 - decisions, rules, and context documents;
@@ -26,7 +28,7 @@ The hosted service is a passive context registry. It stores and serves:
 - client-submitted observations;
 - authentication metadata and audit events.
 
-It does **not**:
+The current MVP does **not**:
 
 - clone or modify working repositories;
 - run `git`, `kubectl`, cloud CLIs, tests, or builds;
@@ -36,6 +38,8 @@ It does **not**:
 
 Local work is performed by the agent and a local `ctx` client. The client may inspect the current workspace, combine local facts with remote context, and publish an allowed checkpoint back to the hub.
 
+Future execution coordination belongs to an Agent Operations module. Even then, the Control Plane manages desired state, policy, assignments, and status; isolated runners in a separate Execution Plane perform workloads.
+
 ```text
 Claude / Codex / Grok
           |
@@ -44,11 +48,11 @@ Claude / Codex / Grok
     |             |
     |             +--- local repository and tools
     |
-    +--- HTTPS ---> Context Hub
-                    - work state
-                    - knowledge
-                    - skills/workflows
-                    - audit
+    +--- HTTPS ---> Agent Control Plane
+                    ├── Context Hub       # current
+                    ├── Capability Registry
+                    ├── Policy & Identity
+                    └── Agent Operations  # future
 ```
 
 ## Design principles

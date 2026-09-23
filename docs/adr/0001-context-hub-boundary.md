@@ -1,6 +1,6 @@
 # ADR 0001: The hosted service is a passive context hub
 
-- Status: Accepted
+- Status: Superseded by ADR 0007
 - Date: 2026-09-24
 
 ## Context
