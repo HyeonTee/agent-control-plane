@@ -179,5 +179,5 @@ type CreateSessionInput struct {
 type CloseSessionInput struct {
 	TaskID    string
 	SessionID string
-	Summary   string
+	Summary   *string
 }

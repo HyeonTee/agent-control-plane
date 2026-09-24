@@ -81,7 +81,7 @@ func (s *Store) CreateWorkSession(ctx context.Context, actor model.Actor, in mod
 	if err != nil {
 		return model.WorkSession{}, dbError(err)
 	}
-	if _, err := tx.Exec(ctx, `UPDATE tasks SET status = 'in_progress', updated_at = now()
+	if _, err := tx.Exec(ctx, `UPDATE tasks SET updated_at = now()
 		WHERE id = $1::uuid`, in.TaskID); err != nil {
 		return model.WorkSession{}, err
 	}
@@ -126,7 +126,7 @@ func (s *Store) CloseWorkSession(ctx context.Context, actor model.Actor, in mode
 	row := tx.QueryRow(ctx, `UPDATE work_sessions AS s
 		SET summary = $3, ended_at = now(), last_activity_at = now()
 		WHERE s.id = $1::uuid AND s.task_id = $2::uuid
-		RETURNING `+sessionColumns, in.SessionID, in.TaskID, in.Summary)
+		RETURNING `+sessionColumns, in.SessionID, in.TaskID, optionalText(in.Summary))
 	session, err := scanWorkSession(row)
 	if err != nil {
 		return model.WorkSession{}, dbError(err)

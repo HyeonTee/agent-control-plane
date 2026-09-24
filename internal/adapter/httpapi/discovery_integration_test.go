@@ -180,6 +180,17 @@ func TestDiscoverWorkAndSessionHistory(t *testing.T) {
 
 	secondTask := request(http.MethodPost, "/api/v1/projects/"+projectID+"/tasks", owner.Secret, "",
 		map[string]any{"title": "second task", "objective": "test task pagination"}, http.StatusCreated)
+	secondTaskPath := "/api/v1/tasks/" + secondTask["id"].(string)
+	briefSession := request(http.MethodPost, secondTaskPath+"/sessions", owner.Secret, "", map[string]any{}, http.StatusCreated)
+	briefClose := request(http.MethodPost, secondTaskPath+"/sessions/"+briefSession["id"].(string)+"/close",
+		owner.Secret, "", map[string]any{}, http.StatusOK)
+	if _, hasSummary := briefClose["summary"]; hasSummary {
+		t.Fatalf("optional session summary unexpectedly present: %v", briefClose)
+	}
+	secondOverview := request(http.MethodGet, secondTaskPath, owner.Secret, "", nil, http.StatusOK)
+	if secondOverview["task"].(map[string]any)["status"] != "todo" || secondOverview["task"].(map[string]any)["version"] != float64(1) {
+		t.Fatalf("starting a session changed task state or version: %v", secondOverview)
+	}
 	request(http.MethodPost, "/api/v1/tasks/"+secondTask["id"].(string)+"/checkpoints", owner.Secret, "wrong-task-session",
 		map[string]any{"session_id": sessionID, "expected_version": 1, "kind": "progress", "summary": "wrong task"}, http.StatusNotFound)
 	request(http.MethodPost, "/api/v1/tasks/"+secondTask["id"].(string)+"/checkpoints", owner.Secret, "second-task-1",

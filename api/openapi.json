@@ -2068,13 +2068,10 @@
           }
         }
       },
-      "CloseWorkSession": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "summary"
-        ],
-        "properties": {
+    "CloseWorkSession": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
           "summary": {
             "type": "string",
             "minLength": 1,

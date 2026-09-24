@@ -86,9 +86,12 @@ func (s *Service) CreateWorkSession(ctx context.Context, actor model.Actor, in m
 }
 
 func (s *Service) CloseWorkSession(ctx context.Context, actor model.Actor, in model.CloseSessionInput) (model.WorkSession, error) {
-	in.Summary = strings.TrimSpace(in.Summary)
-	if !validText(in.Summary, 4000) {
-		return model.WorkSession{}, model.ErrInvalid
+	if in.Summary != nil {
+		trimmed := strings.TrimSpace(*in.Summary)
+		if !validText(trimmed, 4000) {
+			return model.WorkSession{}, model.ErrInvalid
+		}
+		in.Summary = &trimmed
 	}
 	if _, err := s.requireTask(ctx, actor, in.TaskID, model.ScopeWrite); err != nil {
 		return model.WorkSession{}, err

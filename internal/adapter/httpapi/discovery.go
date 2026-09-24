@@ -83,7 +83,7 @@ func registerDiscoveryRoutes(mux *http.ServeMux, service *appwork.Service, withA
 	}))
 	mux.HandleFunc("POST /api/v1/tasks/{task_id}/sessions/{session_id}/close", withActor(func(w http.ResponseWriter, r *http.Request, actor model.Actor) {
 		var body struct {
-			Summary string `json:"summary"`
+			Summary *string `json:"summary"`
 		}
 		if !decodeJSON(w, r, &body) {
 			return
