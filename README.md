@@ -172,6 +172,7 @@ The first deployment target is the existing EC2 instance described in [the deplo
 
 - [Architecture](docs/architecture.md)
 - [Domain model](docs/domain-model.md)
+- [Work discovery and session history proposal](docs/work-discovery.md)
 - [Security and data boundaries](docs/security.md)
 - [Implementation roadmap](docs/roadmap.md)
 - [Architecture decision records](docs/adr/README.md)

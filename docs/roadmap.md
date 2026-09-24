@@ -28,6 +28,16 @@ Exit condition: a clean checkout can start the Hub and verify database readiness
 
 Exit condition: authenticated HTTP clients on two computers can create a task, append a handoff, and retrieve it without installing a project-specific binary. Cross-space access and duplicate retry attempts are rejected.
 
+## Phase 1.5: work discovery and session history
+
+- list active tasks across the token's allowed spaces, with bounded summaries and cursor pagination;
+- return a selected task's overview and latest handoff;
+- introduce task-scoped work sessions and an indexed, paged session history;
+- preserve older checkpoints as pre-session history;
+- test discovery and session isolation across spaces.
+
+Exit condition: a new agent can find a task without a pre-shared ID, read its overview, and drill into any stored work session. See [the proposed read flow](work-discovery.md).
+
 ## Phase 2: bootstrap context
 
 - decisions and rules;
@@ -92,6 +102,6 @@ The following require demonstrated need:
 1. Start a task from computer A using one agent.
 2. Record checkpoints and a final handoff.
 3. Open computer B with a different agent vendor.
-4. Make an authenticated bootstrap API request from an HTTP-capable integration.
+4. List active tasks, select one, and make an authenticated bootstrap API request from an HTTP-capable integration.
 5. Receive the current objective, latest handoff, relevant decisions, rules, and any published skill references.
 6. Continue without granting the Hub access to either computer's repository or environment credentials.

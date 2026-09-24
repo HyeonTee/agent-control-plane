@@ -136,6 +136,10 @@ RevokeToken
 Queries return views:
 
 ```text
+ListActiveWork
+GetTaskOverview
+ListTaskSessions
+GetSessionHistory
 BootstrapContext
 SearchContext
 GetCurrentTask

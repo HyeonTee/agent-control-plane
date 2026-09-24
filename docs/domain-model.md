@@ -92,6 +92,10 @@ A handoff is a checkpoint intended to initialize the next session. It should con
 
 Checkpoints are appended, never edited in place. Corrections create a new checkpoint that supersedes an earlier one.
 
+## Work session (proposed)
+
+A `WorkSession` groups one continuous stretch of work on one task, independent of the agent vendor. It has a Hub-assigned ID, authenticated creator, start and optional end time, last activity, optional summary, and an optional link to the handoff it resumed. Checkpoints created after session support is added belong to a work session. Older checkpoints remain available as pre-session history. See [work discovery and session history](work-discovery.md) for the read flow and indexing plan.
+
 ## Decisions and documents
 
 ```text
