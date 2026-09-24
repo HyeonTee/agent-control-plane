@@ -4,6 +4,8 @@ Vendor-neutral control plane for agent context, capabilities, policies, and futu
 
 The first module is a Context Hub. It does not give an agent memory; it stores enough durable, versioned context for a new agent session to reconstruct the current state of work.
 
+Context Hub is passive with respect to project work: agents create checkpoints, handoffs, and any future summaries; the Hub authenticates, validates, stores, indexes, and returns those records. It does not run agents, invoke an LLM, inspect a workspace, or initiate task changes on its own. [The project glossary](CONTEXT.md) names these responsibilities.
+
 ## Why
 
 Coding work is increasingly distributed across multiple computers and agents such as Claude, Codex, Grok, and future tools. A fresh session usually has to rediscover:
@@ -34,6 +36,7 @@ The current MVP does **not**:
 - run `git`, `kubectl`, cloud CLIs, tests, or builds;
 - hold credentials for company or project environments;
 - execute AI agents or LLM inference;
+- generate summaries or compact records on behalf of an agent;
 - orchestrate autonomous production changes.
 
 Local work is performed by the agent. An agent with an authenticated HTTP integration may call the Hub directly. An optional local adapter may later inspect the workspace, filter local facts, and publish an allowed checkpoint.

@@ -53,7 +53,7 @@ Start with B-tree indexes for task activity, `(task_id, last_activity_at DESC, i
 
 ## Future compact view
 
-An agent may later publish a `SummarySnapshot` for a contiguous range of session entries. It is a derived, versioned view, never a replacement for the entries it covers. The Hub keeps the original checkpoints, handoffs, decisions, and notes immutable and fetchable. Replacing a poor summary creates a new snapshot that supersedes the old snapshot without changing its sources.
+An agent may later publish a `SummarySnapshot` for a contiguous range of session entries. The agent writes the summary; the Hub authenticates the request, validates its shape and source references, stores it, and returns it on request. The Hub never invokes an LLM or launches a summarization job. A snapshot is a derived, versioned view, never a replacement for the entries it covers. The Hub keeps the original checkpoints, handoffs, decisions, and notes immutable and fetchable. Replacing a poor summary creates a new snapshot that supersedes the old snapshot without changing its sources.
 
 ```text
 SummarySnapshot

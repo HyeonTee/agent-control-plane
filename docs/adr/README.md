@@ -12,6 +12,7 @@ ADRs record decisions that constrain future implementation. They are append-only
 | [0006](0006-postgresql-and-object-storage.md) | Use PostgreSQL and object storage | Accepted |
 | [0007](0007-agent-control-plane-is-the-product-boundary.md) | Agent Control Plane is the product boundary; Context Hub is its first module | Accepted |
 | [0008](0008-hosted-api-first.md) | Hosted REST API first; local clients and remote MCP are optional adapters | Accepted |
+| [0009](0009-context-hub-does-not-perform-agent-work.md) | Context Hub does not perform agent work | Accepted |
 
 ## Format
 

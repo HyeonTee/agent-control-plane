@@ -3,7 +3,7 @@
   "info": {
     "title": "Agent Control Plane API",
     "version": "0.2.0",
-    "description": "Hosted Context Hub work-continuity API. Token provisioning is operator-only and is not exposed over HTTP."
+    "description": "Hosted Context Hub work-continuity API. Clients author work records; the Hub authenticates, validates, stores, and serves them without executing agents or generating summaries. Token provisioning is operator-only and is not exposed over HTTP."
   },
   "servers": [
     {

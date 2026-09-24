@@ -28,9 +28,11 @@ The Control Plane owns desired state, policy, assignments, and status. It does n
 
 ### Context Hub
 
-The Context Hub runs on the user's server. It authenticates clients, stores durable context, assembles bootstrap responses, publishes versioned artifacts, and records audit events.
+The Context Hub runs on the user's server. It authenticates clients, stores durable context, assembles bootstrap responses from stored records, serves client-published versioned artifacts, and records audit events.
 
-It never receives environment credentials and never operates a project workspace.
+These are request-driven data operations. The Hub may validate a record, enforce access policy, maintain indexes, and assemble a bounded read view. It does not decide what work to do, start an agent, call an LLM, create a summary, inspect a workspace, or run project commands. A future compact view stores an agent-authored summary and links it to the original records; the Hub does not author or replace those records.
+
+It never receives environment credentials and never operates a project workspace. Future Agent Operations may coordinate work in the broader product, but that capability is not part of Context Hub. Any workload execution remains in the separate Execution Plane.
 
 ### Agent environment
 
@@ -74,7 +76,7 @@ entities, value objects, policies, invariants
         ^
         | application-defined ports
 Outbound adapters
-PostgreSQL / S3 / local process / local filesystem
+PostgreSQL / S3
 ```
 
 Dependencies point inward:
