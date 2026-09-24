@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"strings"
+	"time"
 
 	appwork "github.com/HyeonTee/agent-control-plane/internal/application/work"
 	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
@@ -41,7 +43,15 @@ func registerWorkRoutes(mux *http.ServeMux, backend Backend) {
 				}
 				return
 			}
-			next(w, r, actor)
+			response := &statusRecorder{ResponseWriter: w}
+			next(response, r, actor)
+			if response.status >= 400 {
+				auditCtx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), 3*time.Second)
+				defer cancel()
+				if err := backend.AuditFailure(auditCtx, actor, r.Method+" "+r.Pattern, response.status); err != nil {
+					slog.Error("failure audit failed", "error", err)
+				}
+			}
 		}
 	}
 	mux.HandleFunc("GET /api/v1/spaces", withActor(func(w http.ResponseWriter, r *http.Request, actor model.Actor) {
@@ -150,6 +160,25 @@ func registerWorkRoutes(mux *http.ServeMux, backend Backend) {
 		writeJSON(w, http.StatusOK, item)
 	}))
 	registerDiscoveryRoutes(mux, service, withActor)
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *statusRecorder) WriteHeader(status int) {
+	if w.status == 0 {
+		w.status = status
+	}
+	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *statusRecorder) Write(body []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(body)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

@@ -131,9 +131,13 @@ func run() error {
 	if err := postgres.Migrate(ctx, pool); err != nil {
 		return err
 	}
+	handler := httpapi.NewHandler(pool, postgres.NewStore(pool))
+	if cfg.OriginSecret != "" {
+		handler = httpapi.RequireOriginSecret(handler, cfg.OriginSecret)
+	}
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewHandler(pool, postgres.NewStore(pool)),
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      15 * time.Second,

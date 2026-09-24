@@ -8,6 +8,7 @@ import (
 	"github.com/HyeonTee/agent-control-plane/api"
 	appwork "github.com/HyeonTee/agent-control-plane/internal/application/work"
 	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
+	"github.com/HyeonTee/agent-control-plane/internal/requestid"
 )
 
 type Pinger interface {
@@ -17,6 +18,7 @@ type Pinger interface {
 type Backend interface {
 	appwork.Store
 	Authenticate(context.Context, string) (model.Actor, error)
+	AuditFailure(context.Context, model.Actor, string, int) error
 }
 
 func NewHandler(db Pinger, backend Backend) http.Handler {
@@ -41,5 +43,5 @@ func NewHandler(db Pinger, backend Backend) http.Handler {
 	if backend != nil {
 		registerWorkRoutes(mux, backend)
 	}
-	return mux
+	return requestid.Middleware(mux)
 }

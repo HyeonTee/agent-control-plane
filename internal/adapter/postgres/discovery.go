@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
+	"github.com/HyeonTee/agent-control-plane/internal/requestid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -86,9 +87,9 @@ func (s *Store) ListActiveTasks(ctx context.Context, actor model.Actor, status s
 	}
 	rows.Close()
 	if _, err := s.pool.Exec(ctx, `INSERT INTO audit_events
-		(principal_id, client_id, action, resource_type, result)
-		VALUES ($1::uuid, $2::uuid, 'task.discover', 'task', 'success')`,
-		actor.PrincipalID, actor.ClientID); err != nil {
+		(principal_id, client_id, action, resource_type, result, request_id)
+		VALUES ($1::uuid, $2::uuid, 'task.discover', 'task', 'success', $3)`,
+		actor.PrincipalID, actor.ClientID, requestid.From(ctx)); err != nil {
 		return model.Page[model.TaskCard]{}, err
 	}
 	return page, nil

@@ -179,7 +179,7 @@ Replace `SPACE_ID`, `PROJECT_ID`, `TASK_ID`, and `SESSION_ID` with IDs returned 
 
 To run the Hub without Compose, set `HUB_DATABASE_URL` to a PostgreSQL connection string and optionally set `HUB_HTTP_ADDR` (default `:8080`), then run `go run ./cmd/hub`. Run `go test ./...` and `go vet ./...` before committing. To run the PostgreSQL integration test locally, create a separate `hub_test` database and set `HUB_TEST_DATABASE_URL` to its connection URL; CI provisions one automatically. The test bootstraps an owner, so never point it at a database containing real data.
 
-The first deployment target is the existing EC2 instance described in [the deployment note](docs/deployment-existing-ec2.md). Production configuration is separate from the local Compose file.
+The first deployment target is the existing EC2 instance described in [the deployment note](docs/deployment-existing-ec2.md). Production Compose, HTTPS origin, backup/restore scripts, and a manual deploy workflow are separate from the local Compose file.
 
 ## Documentation
 

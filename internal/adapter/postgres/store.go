@@ -9,6 +9,7 @@ import (
 
 	"github.com/HyeonTee/agent-control-plane/internal/adapter/postgres/db"
 	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
+	"github.com/HyeonTee/agent-control-plane/internal/requestid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -69,9 +70,9 @@ func (s *Store) ListSpaces(ctx context.Context, actor model.Actor) ([]model.Spac
 		spaces = append(spaces, model.Space{ID: row.ID, Name: row.Name})
 	}
 	if _, err := s.pool.Exec(ctx, `INSERT INTO audit_events
-		(principal_id, client_id, action, resource_type, result)
-		VALUES ($1::uuid, $2::uuid, 'space.list', 'space', 'success')`,
-		actor.PrincipalID, actor.ClientID); err != nil {
+		(principal_id, client_id, action, resource_type, result, request_id)
+		VALUES ($1::uuid, $2::uuid, 'space.list', 'space', 'success', $3)`,
+		actor.PrincipalID, actor.ClientID, requestid.From(ctx)); err != nil {
 		return nil, err
 	}
 	return spaces, nil
@@ -236,9 +237,17 @@ func (s *Store) LatestHandoff(ctx context.Context, actor model.Actor, taskID str
 
 func (s *Store) auditRead(ctx context.Context, actor model.Actor, action, resourceType, resourceID string) error {
 	_, err := s.pool.Exec(ctx, `INSERT INTO audit_events
-		(principal_id, client_id, action, resource_type, resource_id, result)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5::uuid, 'success')`,
-		actor.PrincipalID, actor.ClientID, action, resourceType, resourceID)
+		(principal_id, client_id, action, resource_type, resource_id, result, request_id)
+		VALUES ($1::uuid, $2::uuid, $3, $4, $5::uuid, 'success', $6)`,
+		actor.PrincipalID, actor.ClientID, action, resourceType, resourceID, requestid.From(ctx))
+	return err
+}
+
+func (s *Store) AuditFailure(ctx context.Context, actor model.Actor, action string, status int) error {
+	_, err := s.pool.Exec(ctx, `INSERT INTO audit_events
+		(principal_id, client_id, action, resource_type, result, request_id)
+		VALUES ($1::uuid, $2::uuid, $3, 'http_request', $4, $5)`,
+		actor.PrincipalID, actor.ClientID, action, fmt.Sprintf("http_%d", status), requestid.From(ctx))
 	return err
 }
 
@@ -305,8 +314,8 @@ func dbError(err error) error {
 
 func auditWrite(ctx context.Context, tx pgx.Tx, actor model.Actor, action, resourceType, resourceID string) error {
 	_, err := tx.Exec(ctx, `INSERT INTO audit_events
-		(principal_id, client_id, action, resource_type, resource_id, result)
-		VALUES ($1::uuid, $2::uuid, $3, $4, $5::uuid, 'success')`,
-		actor.PrincipalID, actor.ClientID, action, resourceType, resourceID)
+		(principal_id, client_id, action, resource_type, resource_id, result, request_id)
+		VALUES ($1::uuid, $2::uuid, $3, $4, $5::uuid, 'success', $6)`,
+		actor.PrincipalID, actor.ClientID, action, resourceType, resourceID, requestid.From(ctx))
 	return err
 }

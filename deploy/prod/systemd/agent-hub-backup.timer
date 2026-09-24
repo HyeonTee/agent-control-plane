@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly Agent Control Plane PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 18:00:00 UTC
+Persistent=true
+Unit=agent-hub-backup.service
+
+[Install]
+WantedBy=timers.target

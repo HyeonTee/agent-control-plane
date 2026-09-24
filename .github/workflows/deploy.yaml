@@ -1,0 +1,82 @@
+name: deploy
+
+# Manual until the initial capacity, TLS, backup restore, and remote-client
+# checks pass. The reviewed main commit is built for the existing ARM64 EC2.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: agent-control-plane-deploy
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-northeast-2
+
+jobs:
+  hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Verify
+        run: go vet ./... && go test ./...
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push ARM64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: ${{ vars.ECR_REPOSITORY_URL }}:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Upload deployment bundle and run on EC2
+        env:
+          ECR_REPO: ${{ vars.ECR_REPOSITORY_URL }}
+          INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+          DEPLOY_BUCKET: ${{ vars.DEPLOY_BUCKET }}
+        run: |
+          set -euo pipefail
+          tar -czf /tmp/hub-deploy.tar.gz -C deploy/prod .
+          aws s3 cp /tmp/hub-deploy.tar.gz "s3://$DEPLOY_BUCKET/deploy/$GITHUB_SHA.tar.gz" --only-show-errors
+          command_text=$(printf 'set -euo pipefail\nmkdir -p /opt/agent-control-plane\naws s3 cp s3://%s/deploy/%s.tar.gz /tmp/hub-deploy.tar.gz --only-show-errors\ntar -xzf /tmp/hub-deploy.tar.gz -C /opt/agent-control-plane\nbash /opt/agent-control-plane/deploy.sh %s:%s-%s-%s\n' "$DEPLOY_BUCKET" "$GITHUB_SHA" "$ECR_REPO" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT")
+          jq -n --arg command "$command_text" '{commands:[$command]}' > /tmp/ssm-parameters.json
+          command_id=$(aws ssm send-command --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "agent hub ${GITHUB_SHA::7}" \
+            --parameters file:///tmp/ssm-parameters.json \
+            --query Command.CommandId --output text)
+          status=Pending
+          for _ in $(seq 1 90); do
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$status" in
+              Success|Failed|Cancelled|TimedOut|Cancelling) break ;;
+            esac
+            sleep 10
+          done
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" \
+            --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output json \
+            | tee /tmp/hub-deploy-result.json
+          test "$(jq -r .status /tmp/hub-deploy-result.json)" = Success
+      - name: Public HTTPS smoke check
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 18); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' https://agent.gwinam.com/ready || true)
+            if [ "$code" = 204 ]; then exit 0; fi
+            sleep 10
+          done
+          echo "Hub readiness failed with HTTP $code" >&2
+          exit 1

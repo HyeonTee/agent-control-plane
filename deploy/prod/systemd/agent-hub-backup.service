@@ -1,0 +1,8 @@
+[Unit]
+Description=Back up Agent Control Plane PostgreSQL to S3
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/agent-control-plane/backup.sh

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Agent Control Plane origin TLS certificate refresh
+
+[Timer]
+OnCalendar=*-*-* 00:15:00 UTC
+Persistent=true
+Unit=agent-hub-cert-refresh.service
+
+[Install]
+WantedBy=timers.target

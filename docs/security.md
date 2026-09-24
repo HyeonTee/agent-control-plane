@@ -103,7 +103,7 @@ Downloading a package does not authorize execution. The agent integration or opt
 - S3 buckets block public access and use encryption at rest.
 - Sensitive fields are excluded from logs and audit metadata.
 - Sensitive context responses use `Cache-Control: no-store`, and proxy logs never record authorization headers or request bodies.
-- Request bodies have a 64 KiB limit. Unexpected fields and unsupported content types are rejected. Result and request-rate limits are still required before public deployment.
+- Request bodies have a 64 KiB limit. Unexpected fields and unsupported content types are rejected. The prepared production CloudFront stack disables caching and attaches a per-IP WAF rate rule; it must be applied and verified before public client tokens are issued.
 - Browser cross-origin access is disabled unless a specific trusted origin and credential flow are designed.
 
 ## Audit
@@ -121,13 +121,13 @@ timestamp
 redacted metadata
 ```
 
-The actor and client ID are derived from authentication. A caller-provided value such as `codex` or `claude` may be recorded as client metadata but is never trusted as identity. The current implementation records token changes, successful writes, and successful context reads in the database. Invalid token attempts are logged without the token value. Failed authorized operations still need consistent audit records before public deployment; audit records must never store request or response bodies or bearer tokens.
+The actor and client ID are derived from authentication. A caller-provided value such as `codex` or `claude` may be recorded as client metadata but is never trusted as identity. The current implementation records token changes, successful writes and context reads, and failed authenticated HTTP operations in the database with generated request IDs. Invalid token attempts are logged without the token value. Audit records never store request or response bodies or bearer tokens.
 
 ## Backup and recovery
 
-Automated backup is part of the MVP because the Hub exists to preserve continuity.
+Automated backup is part of the MVP because the Hub exists to preserve continuity. The prepared EC2 deployment includes nightly S3 dumps, weekly isolated restore checks, and an immediate backup/restore check during first deployment; these are not live until that deployment is applied.
 
-- daily PostgreSQL dump to a versioned S3 bucket;
+- daily PostgreSQL dump to a private S3 bucket;
 - object lifecycle retention;
 - documented restore procedure;
 - periodic restore verification;

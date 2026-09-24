@@ -1,0 +1,8 @@
+[Unit]
+Description=Refresh Agent Control Plane origin TLS certificate from ACM
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/agent-control-plane/refresh-cert.sh

@@ -96,6 +96,9 @@ func TestDiscoverWorkAndSessionHistory(t *testing.T) {
 		if response.Header.Get("Cache-Control") != "no-store" {
 			t.Fatalf("%s %s omitted no-store", method, path)
 		}
+		if response.Header.Get("X-Request-ID") == "" {
+			t.Fatalf("%s %s omitted request ID", method, path)
+		}
 		return result
 	}
 	items := func(page map[string]any) []any {
@@ -236,4 +239,18 @@ func TestDiscoverWorkAndSessionHistory(t *testing.T) {
 	request(http.MethodGet, "/api/v1/tasks/"+taskID, foreign.Secret, "", nil, http.StatusNotFound)
 	request(http.MethodGet, detailPath, foreign.Secret, "", nil, http.StatusNotFound)
 	request(http.MethodPost, sessionPath, foreign.Secret, "", map[string]any{}, http.StatusNotFound)
+	var successfulReads, deniedWrites int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM audit_events
+		WHERE client_id = $1::uuid AND action = 'task.discover'
+		AND result = 'success' AND request_id IS NOT NULL`, owner.ClientID).Scan(&successfulReads); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM audit_events
+		WHERE client_id = $1::uuid AND result = 'http_403'
+		AND request_id IS NOT NULL`, otherWriter.ClientID).Scan(&deniedWrites); err != nil {
+		t.Fatal(err)
+	}
+	if successfulReads == 0 || deniedWrites < 2 {
+		t.Fatalf("audit events omitted request IDs or denied writes: reads=%d denied=%d", successfulReads, deniedWrites)
+	}
 }

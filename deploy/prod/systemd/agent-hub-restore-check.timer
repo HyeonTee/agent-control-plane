@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Agent Control Plane backup restore verification
+
+[Timer]
+OnCalendar=Sun *-*-* 18:30:00 UTC
+Persistent=true
+Unit=agent-hub-restore-check.service
+
+[Install]
+WantedBy=timers.target
