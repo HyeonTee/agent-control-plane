@@ -90,6 +90,7 @@ The following require demonstrated need:
 - web UI;
 - OAuth/OIDC provider integration for the REST API unless a supported integration requires it earlier;
 - vector or embedding search;
+- agent-authored compact views of session history (with immutable source records and provenance);
 - local `ctx` CLI or MCP adapter;
 - multi-user administration;
 - background queue;

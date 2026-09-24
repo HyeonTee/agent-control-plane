@@ -35,9 +35,9 @@ WorkSession
 - resumed_from_handoff_id optional
 ```
 
-Each new work session can point to the handoff it resumed from. Its entries are append-only and ordered by a server-assigned sequence. The first entry type is an existing checkpoint or handoff. A session may later include an explicitly submitted decision, note, or sanitized transcript segment. Closing a session can publish a final summary and handoff; an abruptly interrupted session remains readable without pretending it closed cleanly.
+Each new work session can point to the handoff it resumed from. Its entries are append-only and ordered by a server-assigned sequence. The first entry type is an existing checkpoint or handoff. A session may later include an explicitly submitted decision or note. Closing a session can publish a final summary and handoff; an abruptly interrupted session remains readable without pretending it closed cleanly.
 
-The word **full** means all content the client actually submitted for that session. The Hub cannot retrieve an agent product's private chat history by knowing its vendor name or session ID. Raw chat transcripts, if wanted, need an explicit export/integration, a separate project policy and retention limit, and filtering for secrets and prohibited data. They are not automatically captured by this design.
+The word **full** means all structured work records the client actually submitted for that session. Raw agent conversations are out of scope. The Hub cannot retrieve an agent product's private chat history by knowing its vendor name or session ID, and it does not store conversation transcripts.
 
 Existing checkpoints have no session ID. A migration must keep them accessible as `pre-session history` rather than inventing session boundaries. Task cards and overviews expose `has_pre_session_history` so the first stored task does not appear empty. New checkpoint writes should carry a Hub session ID once session creation is available.
 
@@ -50,6 +50,25 @@ In PostgreSQL, new checkpoints can gain a `session_id` foreign key. A `session_e
 The read interface is a small set of user-intent queries: `ListActiveWork`, `GetTaskOverview`, `ListTaskSessions`, and `GetSessionHistory`. A PostgreSQL adapter can assemble list and overview projections with joins and indexed lookups; clients do not need to reconstruct them through many entity calls. This keeps the session/indexing implementation behind the work-continuity module's interface.
 
 Start with B-tree indexes for task activity, `(task_id, last_activity_at DESC, id DESC)` for sessions, and `(session_id, sequence)` for entries. Use cursor pagination for every unbounded history. Full-text search is a separate feature and only needs an index when searching session content is actually offered; a vector database is unnecessary for this navigation flow.
+
+## Future compact view
+
+An agent may later publish a `SummarySnapshot` for a contiguous range of session entries. It is a derived, versioned view, never a replacement for the entries it covers. The Hub keeps the original checkpoints, handoffs, decisions, and notes immutable and fetchable. Replacing a poor summary creates a new snapshot that supersedes the old snapshot without changing its sources.
+
+```text
+SummarySnapshot
+- id, session_id, version
+- first_entry_sequence, last_entry_sequence
+- summary
+- key_facts with source entry references
+- open_actions, warnings, and uncertainties
+- created_by_client, created_at
+- supersedes_id optional
+```
+
+A compact response can contain the latest valid snapshot plus entries added after its covered range. It must expose that range and source references so a client can expand any claim into the original record. Decisions, unresolved actions, warnings, and the latest handoff remain separately visible in task overviews and bootstrap responses; compaction must not make them disappear because they were omitted from prose. The server can validate coverage and references but cannot prove that an agent's summary preserved every important meaning. Clients should label the snapshot as derived and stale when new entries fall outside its range.
+
+This feature is deferred until session histories are long enough to justify it. The first discovery release reads original records and existing checkpoint summaries directly.
 
 ## Acceptance example
 
