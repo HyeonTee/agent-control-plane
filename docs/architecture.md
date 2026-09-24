@@ -2,7 +2,7 @@
 
 ## System context
 
-Agent Control Plane is the product boundary. The current implementation consists of a hosted Control Plane application and a local client with different trust and execution boundaries.
+Agent Control Plane is the product boundary. The first implementation is a hosted API. Agents with authenticated HTTP integrations call it directly; workspace execution remains in the agent's environment.
 
 The first delivered module is the Context Hub. Capability Registry and Policy & Identity support it. Agent Operations is a future module and is not part of the MVP.
 
@@ -18,8 +18,9 @@ Agent Control Plane
     └── Scheduling
 
 Execution Plane                 # separate trust boundary
-├── local ctx and coding agents
+├── coding agents and their local tools
 ├── CI runners
+├── optional local ctx adapter
 └── future isolated hosted runners
 ```
 
@@ -31,17 +32,16 @@ The Context Hub runs on the user's server. It authenticates clients, stores dura
 
 It never receives environment credentials and never operates a project workspace.
 
-### Local client
+### Agent environment
 
-The `ctx` client runs on the computer where work happens. It provides a CLI and a local MCP server. It can inspect the current workspace using locally available tools and credentials, merge those facts with remote context, and publish only data allowed by the project's sync policy.
+An agent may inspect its current workspace using tools available in its environment. An authenticated HTTP integration can retrieve Hub context and publish permitted data. The agent or integration must check the project's sync policy before upload. A local `ctx` adapter may be added later to automate this policy check and workspace observation; it is not required for the first usable flow.
 
 ```text
 ┌──────────────── Local computer ────────────────┐
 │                                                │
-│  AI agent ──> ctx CLI / local MCP              │
-│                    |             |              │
-│                    |             +--> git/files │
-│                    |             +--> local CLI │
+│  AI agent ──> local repository and tools        │
+│       |                                        │
+│       +--> authenticated HTTP integration       │
 └────────────────────┼────────────────────────────┘
                      │ REST/JSON over HTTPS
 ┌────────────────────▼────────────────────────────┐
@@ -58,11 +58,11 @@ The `ctx` client runs on the computer where work happens. It provides a CLI and 
 
 ## Architectural style
 
-The Hub and client are built as a modular monolith using hexagonal boundaries.
+The Hub is built as a modular monolith using hexagonal seams. An optional local adapter can follow the same dependency direction if introduced.
 
 ```text
 Inbound adapters
-HTTP / MCP / CLI
+HTTP (MCP or CLI if added later)
         |
         v
 Application
@@ -183,22 +183,23 @@ This is a light command/query separation, not a separate CQRS infrastructure.
 
 ## Canonical protocol
 
-REST/JSON is the canonical network protocol. The API is versioned under `/api/v1`, documented by OpenAPI, and uses stable machine-readable error codes.
+REST/JSON is the canonical network protocol. The API is versioned under `/api/v1`, documented by an OpenAPI description served at `/openapi.json`, and uses stable machine-readable error codes. The API description contains no project data or credentials. Project data and all writes require authentication and per-resource authorization.
 
-MCP maps tools and resources to the same application use cases. It must contain no independent authorization, selection, or persistence logic.
+The first workflow needs endpoints to create a project and task, append a checkpoint, read a task timeline, and bootstrap a project. For example, a checkpoint append targets `POST /api/v1/tasks/{task_id}/checkpoints`, includes the task version observed by the caller, and carries an `Idempotency-Key` header. Retrying the same key and payload returns the original result; reusing a key for different content fails. A stale task version returns a conflict. The OpenAPI contract will define the final route names, payload schemas, and error codes before implementation.
 
-The initial MCP integration runs locally:
+An OpenAPI description tells clients how to call the API; it does not give an agent an HTTP tool or credential store. Each supported agent integration must be exercised with authenticated reads and writes.
+
+Remote MCP may be added later for clients that support it:
 
 ```text
-agent -> stdio MCP (`ctx mcp serve`) -> Hub REST API
-                                  └-> local workspace observations
+agent -> remote MCP over HTTPS -> same application use cases
 ```
 
-A remote MCP endpoint can be added later without changing the domain or application layers.
+MCP must contain no independent authorization, selection, or persistence logic. Its authentication and transport behavior must follow the MCP specification selected at implementation time. A local MCP adapter remains possible if local capabilities require it.
 
 ## Local observation model
 
-The Hub does not poll Git, Kubernetes, AWS, or other project systems. The local client may submit a typed observation after applying the project's sync policy.
+The Hub does not poll Git, Kubernetes, AWS, or other project systems. An agent or optional local adapter may submit a typed observation after checking the project's sync policy. The Hub validates authorization, declared classification, schema, and size but cannot prove that free text was sanitized at its source.
 
 Every observation includes:
 
@@ -206,7 +207,8 @@ Every observation includes:
 kind
 schema_version
 project_id
-source_device_id
+source_client_id (derived from authentication)
+source_device_id optional
 observed_at
 expires_at optional
 payload
@@ -219,8 +221,7 @@ Expired observations are marked stale. A failed refresh never silently presents 
 
 ```text
 cmd/
-├── hub/
-└── ctx/
+└── hub/
 
 internal/
 ├── domain/
@@ -233,13 +234,11 @@ internal/
 │   └── query/
 └── adapter/
     ├── httpapi/
-    ├── mcp/
     ├── postgres/
-    ├── s3/
-    └── local/
+    └── s3/                    # when artifact storage is introduced
 ```
 
-Go interfaces should normally live next to the application code that consumes them. Adapter packages satisfy those interfaces implicitly.
+Go interfaces should normally live next to the application code that consumes them. Adapter packages satisfy those interfaces implicitly. Optional CLI or MCP adapter packages are added only when implemented.
 
 ## Deployment
 

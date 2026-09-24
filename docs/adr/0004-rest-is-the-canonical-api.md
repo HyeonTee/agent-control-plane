@@ -1,6 +1,6 @@
 # ADR 0004: REST/JSON is the canonical remote API
 
-- Status: Accepted
+- Status: Superseded by ADR 0008
 - Date: 2026-09-24
 
 ## Context

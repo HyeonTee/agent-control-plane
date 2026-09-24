@@ -1,6 +1,6 @@
 # ADR 0003: Use a modular monolith with hexagonal boundaries
 
-- Status: Accepted
+- Status: Superseded by ADR 0008
 - Date: 2026-09-24
 
 ## Context

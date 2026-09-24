@@ -1,6 +1,6 @@
 # ADR 0005: Local clients produce environment observations
 
-- Status: Accepted
+- Status: Superseded by ADR 0008
 - Date: 2026-09-24
 
 ## Context

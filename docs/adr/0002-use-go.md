@@ -1,6 +1,6 @@
 # ADR 0002: Use Go for the Hub and local client
 
-- Status: Accepted
+- Status: Superseded by ADR 0008
 - Date: 2026-09-24
 
 ## Context

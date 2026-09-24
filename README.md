@@ -14,7 +14,7 @@ Coding work is increasingly distributed across multiple computers and agents suc
 - which skills and workflows should be used;
 - what should happen next.
 
-Agent Control Plane provides one user-owned platform from which those agents can pull the same context and capabilities and to which they can publish checkpoints and handoffs.
+Agent Control Plane provides one user-owned platform from which those agents can pull the same context and capabilities and to which they can publish checkpoints and handoffs through a hosted API.
 
 ## Product boundary
 
@@ -36,29 +36,28 @@ The current MVP does **not**:
 - execute AI agents or LLM inference;
 - orchestrate autonomous production changes.
 
-Local work is performed by the agent and a local `ctx` client. The client may inspect the current workspace, combine local facts with remote context, and publish an allowed checkpoint back to the hub.
+Local work is performed by the agent. An agent with an authenticated HTTP integration may call the Hub directly. An optional local adapter may later inspect the workspace, filter local facts, and publish an allowed checkpoint.
 
 Future execution coordination belongs to an Agent Operations module. Even then, the Control Plane manages desired state, policy, assignments, and status; isolated runners in a separate Execution Plane perform workloads.
 
 ```text
-Claude / Codex / Grok
-          |
-          v
-  ctx CLI / local MCP
-    |             |
-    |             +--- local repository and tools
-    |
-    +--- HTTPS ---> Agent Control Plane
-                    ├── Context Hub       # current
-                    ├── Capability Registry
-                    ├── Policy & Identity
-                    └── Agent Operations  # future
+Claude / Codex / other agents
+      |                  |
+      | local tools      | authenticated HTTPS
+      v                  v
+ local workspace   Agent Control Plane
+                   ├── Context Hub       # current
+                   ├── Capability Registry
+                   ├── Policy & Identity
+                   └── Agent Operations  # future
+
+Optional later: local ctx adapter or remote MCP endpoint
 ```
 
 ## Design principles
 
 1. **Vendor neutral**: provider names do not appear in domain rules. Vendors are clients or adapters.
-2. **Local execution**: workspace inspection and environment commands run on the user's computer.
+2. **Local execution**: workspace inspection and environment commands run where the agent works, never in the Hub.
 3. **Explicit data boundaries**: each project declares what may be synchronized to the personal hub.
 4. **Versioned knowledge**: published skills, workflows, and durable decisions are traceable and reproducible.
 5. **Append-oriented continuity**: checkpoints and handoffs form a history instead of overwriting prior work.
@@ -67,11 +66,12 @@ Claude / Codex / Grok
 
 ## Technology direction
 
-- Go for the hub server, CLI, and local MCP adapter
+- Go for the Hub server; optional local adapters may also use Go
 - PostgreSQL for relational and searchable metadata
-- S3-compatible object storage for skill and workflow artifacts
+- S3-compatible object storage when skill and workflow artifacts are introduced
 - REST/JSON as the canonical remote API
-- MCP as an adapter over application use cases
+- Published OpenAPI contract for authenticated HTTP clients
+- Remote MCP as a possible later adapter over application use cases
 - Caddy and Docker Compose for deployment
 - OpenTofu for AWS infrastructure
 
@@ -81,13 +81,12 @@ The exact dependency versions will be pinned when the executable skeleton is cre
 
 The first usable vertical slice is intentionally small:
 
-1. authenticate a device;
+1. provision a scoped client token and authenticate API requests;
 2. register a project and task;
 3. append a checkpoint or handoff;
-4. publish and retrieve a versioned skill;
-5. build a compact bootstrap context;
-6. access the same use cases from REST, `ctx`, and local MCP;
-7. audit writes and back up durable data.
+4. build a compact bootstrap context;
+5. publish an OpenAPI contract and exercise the flow with authenticated HTTP requests;
+6. audit writes and back up durable data.
 
 Success means that work started with one agent can be resumed from another computer or agent without re-explaining the task from scratch.
 
@@ -96,8 +95,7 @@ Success means that work started with one agent can be resumed from another compu
 ```text
 .
 ├── cmd/
-│   ├── hub/                    # hosted API server
-│   └── ctx/                    # local CLI and MCP process
+│   └── hub/                    # hosted API server
 ├── internal/
 │   ├── domain/
 │   ├── application/
@@ -108,6 +106,8 @@ Success means that work started with one agent can be resumed from another compu
 ├── deploy/
 └── docs/
 ```
+
+`ctx` and MCP adapter packages are added only if their use cases justify them.
 
 The repository currently contains design documentation only. Commands for building, testing, and deployment will be added with the first executable slice rather than documented speculatively.
 

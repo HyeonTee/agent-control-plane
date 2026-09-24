@@ -27,7 +27,7 @@ Project
 - updated_at
 ```
 
-Local paths are deliberately absent. A path belongs to a device-local workspace binding managed by `ctx`, not to the shared project.
+Local paths are deliberately absent. They belong to the working environment and are never shared project identity. An optional local adapter may keep a device-local workspace binding.
 
 ## Task
 
@@ -226,7 +226,8 @@ Observation
 - project_id
 - kind
 - schema_version
-- source_device_id
+- source_client_id
+- source_device_id optional
 - observed_at
 - expires_at optional
 - payload
@@ -234,7 +235,7 @@ Observation
 - created_at
 ```
 
-Examples include Git revision, working-tree state, test results, or a sanitized runtime summary. Raw credentials and prohibited project data are not observations.
+Examples include Git revision, working-tree state, test results, or a sanitized runtime summary. The source client ID is derived from authentication. Raw credentials and prohibited project data are not observations.
 
 ## Context pack
 
