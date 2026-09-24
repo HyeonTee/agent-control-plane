@@ -1,0 +1,31 @@
+# Local development only. PostgreSQL is private to the Compose network.
+name: agent-control-plane
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: hub
+      POSTGRES_USER: hub
+      POSTGRES_PASSWORD: local-development-only
+    volumes:
+      - hub_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hub -d hub"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  hub:
+    build: .
+    environment:
+      HUB_HTTP_ADDR: :8080
+      HUB_DATABASE_URL: postgres://hub:local-development-only@db:5432/hub?sslmode=disable
+    ports:
+      - "127.0.0.1:8081:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  hub_pgdata:

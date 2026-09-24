@@ -242,15 +242,17 @@ Go interfaces should normally live next to the application code that consumes th
 
 ## Deployment
 
-The initial deployment has three containers:
+The initial deployment reuses the existing EC2 instance. Its proposed public route is:
 
 ```text
-Caddy -> Hub -> PostgreSQL
-               |
-               +-> S3 artifact and backup buckets
+agent.gwinam.com -> CloudFront -> dedicated Hub origin port on EC2
+                                  |
+                                  +-> Hub Compose project -> private PostgreSQL
+                                  +-> S3 backup bucket when deployed
 ```
 
-- Caddy is the only public process.
+- Justice already owns host port 80; the Hub uses a separate origin listener and Compose project.
+- The origin transport and certificate renewal path must be decided before private project data is exposed. See [the existing EC2 deployment note](deployment-existing-ec2.md).
 - PostgreSQL is available only on the internal container network.
 - The Hub's instance role is limited to its own parameters, artifacts, backups, image pulls, and logs.
 - No role grants access to a project or company environment.

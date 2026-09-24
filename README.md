@@ -72,10 +72,10 @@ Optional later: local ctx adapter or remote MCP endpoint
 - REST/JSON as the canonical remote API
 - Published OpenAPI contract for authenticated HTTP clients
 - Remote MCP as a possible later adapter over application use cases
-- Caddy and Docker Compose for deployment
+- Docker Compose on the existing EC2 instance, with a separate CloudFront distribution planned for the public API
 - OpenTofu for AWS infrastructure
 
-The exact dependency versions will be pinned when the executable skeleton is created. See [ADR 0002](docs/adr/0002-use-go.md).
+The Go toolchain and dependencies are pinned in `go.mod` and `go.sum`. See [ADR 0008](docs/adr/0008-hosted-api-first.md).
 
 ## MVP
 
@@ -90,26 +90,44 @@ The first usable vertical slice is intentionally small:
 
 Success means that work started with one agent can be resumed from another computer or agent without re-explaining the task from scratch.
 
-## Planned repository layout
+## Repository layout
 
 ```text
 .
 ├── cmd/
 │   └── hub/                    # hosted API server
 ├── internal/
-│   ├── domain/
-│   ├── application/
-│   └── adapter/
+│   ├── adapter/
+│   │   ├── httpapi/
+│   │   └── postgres/
+│   │       └── migrations/     # embedded SQL migrations
+│   └── config/
 ├── api/                        # OpenAPI contract
-├── schemas/                    # skill/workflow/context schemas
-├── migrations/
-├── deploy/
+├── compose.yaml                # local development
+├── Dockerfile
 └── docs/
 ```
 
 `ctx` and MCP adapter packages are added only if their use cases justify them.
 
-The repository currently contains design documentation only. Commands for building, testing, and deployment will be added with the first executable slice rather than documented speculatively.
+The repository now contains the Phase 0 Hub skeleton. Project and task endpoints are not implemented yet.
+
+## Run locally
+
+Docker Compose starts a private PostgreSQL container and binds the Hub to `127.0.0.1:8081` on the host:
+
+```sh
+docker compose up --build -d
+curl -i http://127.0.0.1:8081/health
+curl -i http://127.0.0.1:8081/ready
+curl http://127.0.0.1:8081/openapi.json
+```
+
+`/health` reports process liveness. `/ready` returns 204 only when PostgreSQL responds. The Hub runs embedded SQL migrations before accepting requests. The local Compose password is for development only and is not used for deployment.
+
+To run the Hub without Compose, set `HUB_DATABASE_URL` to a PostgreSQL connection string and optionally set `HUB_HTTP_ADDR` (default `:8080`), then run `go run ./cmd/hub`. Run `go test ./...` and `go vet ./...` before committing.
+
+The first deployment target is the existing EC2 instance described in [the deployment note](docs/deployment-existing-ec2.md). Production configuration is separate from the local Compose file.
 
 ## Documentation
 
@@ -121,4 +139,4 @@ The repository currently contains design documentation only. Commands for buildi
 
 ## Status
 
-Design phase. No server or CLI implementation exists yet.
+Phase 0 skeleton complete. The Hub has health, readiness, OpenAPI discovery, and a migration runner. No authenticated project or task operations exist yet; those are the next slice.

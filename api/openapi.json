@@ -1,0 +1,42 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agent Control Plane API",
+    "version": "0.1.0",
+    "description": "Hosted context hub. Project and task operations will be added in the next slice."
+  },
+  "servers": [{ "url": "https://agent.gwinam.com" }],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Process liveness",
+        "responses": { "204": { "description": "Process is running" } }
+      }
+    },
+    "/ready": {
+      "get": {
+        "summary": "Database readiness",
+        "responses": {
+          "204": { "description": "Database is available" },
+          "503": { "description": "Database is unavailable" }
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "summary": "Public API description",
+        "responses": {
+          "200": {
+            "description": "OpenAPI description",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "clientToken": { "type": "http", "scheme": "bearer" }
+    }
+  }
+}

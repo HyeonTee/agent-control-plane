@@ -68,7 +68,7 @@ Exit condition: at least two supported agent clients can bootstrap and checkpoin
 - search using PostgreSQL full-text search;
 - automated PostgreSQL backup to S3;
 - restore runbook and restore test;
-- production Docker Compose, Caddy, ECR, SSM deployment;
+- production Docker Compose on the existing EC2, CloudFront, ECR, and SSM deployment;
 - resource limits and basic operational metrics.
 
 Exit condition: the Hub can be safely operated on the existing small EC2 footprint and recovered from a fresh instance.
