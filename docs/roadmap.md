@@ -30,6 +30,8 @@ Exit condition: authenticated HTTP clients on two computers can create a task, a
 
 ## Phase 1.5: work discovery and session history
 
+Implemented locally; public deployment and cross-computer client verification remain separate work.
+
 - list active tasks across the token's allowed spaces, with bounded summaries and cursor pagination;
 - return a selected task's overview and latest handoff;
 - introduce task-scoped work sessions and an indexed, paged session history;

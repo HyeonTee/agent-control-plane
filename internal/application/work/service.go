@@ -18,6 +18,14 @@ type Store interface {
 	AppendCheckpoint(context.Context, model.Actor, model.AppendCheckpointInput) (model.Checkpoint, error)
 	TaskTimeline(context.Context, model.Actor, string) ([]model.Checkpoint, error)
 	LatestHandoff(context.Context, model.Actor, string) (model.Checkpoint, error)
+	ListActiveTasks(context.Context, model.Actor, string, int, string) (model.Page[model.TaskCard], error)
+	TaskOverview(context.Context, model.Actor, string) (model.TaskOverview, error)
+	ListTaskSessions(context.Context, model.Actor, string, int, string) (model.Page[model.WorkSession], error)
+	SessionDetail(context.Context, model.Actor, string, string) (model.SessionDetail, error)
+	SessionEntries(context.Context, model.Actor, string, string, int, string) (model.Page[model.SessionEntry], error)
+	PreSessionHistory(context.Context, model.Actor, string, int, string) (model.Page[model.Checkpoint], error)
+	CreateWorkSession(context.Context, model.Actor, model.CreateSessionInput) (model.WorkSession, error)
+	CloseWorkSession(context.Context, model.Actor, model.CloseSessionInput) (model.WorkSession, error)
 }
 
 type Service struct{ store Store }
@@ -68,6 +76,9 @@ func (s *Service) ListTasks(ctx context.Context, actor model.Actor, projectID st
 
 func (s *Service) AppendCheckpoint(ctx context.Context, actor model.Actor, in model.AppendCheckpointInput) (model.Checkpoint, error) {
 	in.Summary = strings.TrimSpace(in.Summary)
+	if in.SessionID != nil && strings.TrimSpace(*in.SessionID) == "" {
+		return model.Checkpoint{}, model.ErrInvalid
+	}
 	if in.ExpectedVersion < 1 || !validText(in.Summary, 4000) || (in.Kind != "progress" && in.Kind != "handoff") || len(in.IdempotencyKey) < 8 || len(in.IdempotencyKey) > 128 || !validOptional(in.SourceRevision, 200) {
 		return model.Checkpoint{}, model.ErrInvalid
 	}

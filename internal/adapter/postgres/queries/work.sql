@@ -47,7 +47,7 @@ FROM tasks WHERE project_id = sqlc.arg(project_id)::uuid
 ORDER BY created_at DESC, id DESC LIMIT 100;
 
 -- name: TaskTimeline :many
-SELECT id::text AS id, task_id::text AS task_id, task_version, kind, summary,
+SELECT id::text AS id, task_id::text AS task_id, COALESCE(session_id::text, '') AS session_id, task_version, kind, summary,
     completed, remaining, warnings, changed_paths, test_results,
     source_revision, created_by_principal::text AS created_by_principal,
     created_by_client::text AS created_by_client, created_at
@@ -55,7 +55,7 @@ FROM checkpoints WHERE task_id = sqlc.arg(task_id)::uuid
 ORDER BY task_version DESC LIMIT 50;
 
 -- name: LatestHandoff :one
-SELECT id::text AS id, task_id::text AS task_id, task_version, kind, summary,
+SELECT id::text AS id, task_id::text AS task_id, COALESCE(session_id::text, '') AS session_id, task_version, kind, summary,
     completed, remaining, warnings, changed_paths, test_results,
     source_revision, created_by_principal::text AS created_by_principal,
     created_by_client::text AS created_by_client, created_at

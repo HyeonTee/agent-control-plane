@@ -113,7 +113,7 @@ Success means that work started with one agent can be resumed from another compu
 
 `ctx` and MCP adapter packages are added only if their use cases justify them.
 
-The repository now contains the Phase 1 work-continuity API. Bootstrap context assembly, skill registry, and production deployment remain on the roadmap.
+The repository now contains the work-continuity and work-discovery APIs. Bootstrap context assembly, skill registry, and production deployment remain on the roadmap.
 
 ## Run locally
 
@@ -146,13 +146,19 @@ curl -X POST http://127.0.0.1:8081/api/v1/spaces/SPACE_ID/projects \
 curl -X POST http://127.0.0.1:8081/api/v1/projects/PROJECT_ID/tasks \
   -H "Authorization: Bearer $HUB_TOKEN" -H 'Content-Type: application/json' \
   -d '{"title":"First task","objective":"Record and resume the work"}'
+curl -X POST http://127.0.0.1:8081/api/v1/tasks/TASK_ID/sessions \
+  -H "Authorization: Bearer $HUB_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"client_label":"my-agent"}'
 curl -X POST http://127.0.0.1:8081/api/v1/tasks/TASK_ID/checkpoints \
   -H "Authorization: Bearer $HUB_TOKEN" -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: first-handoff-001' \
-  -d '{"expected_version":1,"kind":"handoff","summary":"Ready to continue","remaining":["Take the next step"]}'
+  -d '{"session_id":"SESSION_ID","expected_version":1,"kind":"handoff","summary":"Ready to continue","remaining":["Take the next step"]}'
+curl -X POST http://127.0.0.1:8081/api/v1/tasks/TASK_ID/sessions/SESSION_ID/close \
+  -H "Authorization: Bearer $HUB_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"summary":"Handoff published"}'
 ```
 
-Issue a separate token for another integration, with only the scope it needs. The second token can read the handoff through the same HTTP API without installing this repository:
+Issue a separate token for another integration, with only the scope it needs. The second token can discover active tasks, inspect one task, and read a session through the same HTTP API without installing this repository:
 
 ```sh
 docker compose run --rm -T hub admin issue-token -space-id SPACE_ID \
@@ -160,10 +166,14 @@ docker compose run --rm -T hub admin issue-token -space-id SPACE_ID \
 read -rs SECOND_TOKEN
 export SECOND_TOKEN
 curl -H "Authorization: Bearer $SECOND_TOKEN" \
-  http://127.0.0.1:8081/api/v1/tasks/TASK_ID/handoff
+  'http://127.0.0.1:8081/api/v1/tasks?status=active'
+curl -H "Authorization: Bearer $SECOND_TOKEN" \
+  http://127.0.0.1:8081/api/v1/tasks/TASK_ID
+curl -H "Authorization: Bearer $SECOND_TOKEN" \
+  http://127.0.0.1:8081/api/v1/tasks/TASK_ID/sessions/SESSION_ID
 ```
 
-Replace `SPACE_ID`, `PROJECT_ID`, and `TASK_ID` with IDs returned by the API. The [OpenAPI contract](api/openapi.json) describes all endpoints and errors. A handoff requires at least one `remaining` action. Checkpoint retries use the same `Idempotency-Key` and request body; a changed body or stale task version returns 409.
+Replace `SPACE_ID`, `PROJECT_ID`, `TASK_ID`, and `SESSION_ID` with IDs returned by the API. The [OpenAPI contract](api/openapi.json) describes all endpoints and errors. Task and session lists return bounded pages with `next_cursor`; pass it back as the `cursor` query parameter to continue. A handoff requires at least one `remaining` action. Checkpoint retries use the same `Idempotency-Key` and request body; a changed body or stale task version returns 409. Older checkpoints without a session ID remain available through the task overview and `/pre-session-history`.
 
 `/health` reports process liveness. `/ready` returns 204 only when PostgreSQL responds. The Hub runs embedded SQL migrations before accepting requests. The local Compose password is for development only and is not used for deployment.
 
@@ -175,11 +185,11 @@ The first deployment target is the existing EC2 instance described in [the deplo
 
 - [Architecture](docs/architecture.md)
 - [Domain model](docs/domain-model.md)
-- [Work discovery and session history proposal](docs/work-discovery.md)
+- [Work discovery and session history](docs/work-discovery.md)
 - [Security and data boundaries](docs/security.md)
 - [Implementation roadmap](docs/roadmap.md)
 - [Architecture decision records](docs/adr/README.md)
 
 ## Status
 
-Phase 1 work continuity is implemented locally: scoped tokens, spaces, projects, tasks, checkpoints, handoffs, optimistic versions, idempotent retries, and read/write audit events. The local end-to-end flow was exercised with two distinct tokens. Production exposure still requires HTTPS origin configuration, rate limiting, database backup and restore testing, and resource checks on the existing EC2 host.
+Work continuity and discovery are implemented locally: scoped tokens, spaces, projects, task discovery and overviews, task-scoped sessions, paged session entries, checkpoints, handoffs, optimistic versions, idempotent retries, and read/write audit events. PostgreSQL integration tests cover cross-space isolation and pagination. Production exposure still requires HTTPS origin configuration, rate limiting, database backup and restore testing, resource checks on the existing EC2 host, and a cross-computer agent integration check.

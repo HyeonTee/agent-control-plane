@@ -92,9 +92,9 @@ A handoff is a checkpoint intended to initialize the next session. It should con
 
 Checkpoints are appended, never edited in place. Corrections create a new checkpoint that supersedes an earlier one.
 
-## Work session (proposed)
+## Work session
 
-A `WorkSession` groups one continuous stretch of work on one task, independent of the agent vendor. It has a Hub-assigned ID, authenticated creator, start and optional end time, last activity, optional summary, and an optional link to the handoff it resumed. Checkpoints created after session support is added belong to a work session. Older checkpoints remain available as pre-session history. See [work discovery and session history](work-discovery.md) for the read flow and indexing plan.
+A `WorkSession` groups one continuous stretch of work on one task, independent of the agent vendor. It has a Hub-assigned ID, authenticated creator, start and optional end time, last activity, optional summary, and an optional link to the handoff it resumed. New clients can attach checkpoints to a work session; checkpoints without a session ID remain available as pre-session history. See [work discovery and session history](work-discovery.md) for the read flow and indexing plan.
 
 Session history consists of structured work records, not raw agent conversations. A future agent-authored `SummarySnapshot` may provide a compact derived view over a cited range of entries. It never replaces or deletes its source records; Context Hub only validates, stores, and serves it.
 

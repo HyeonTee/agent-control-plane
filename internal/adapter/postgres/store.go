@@ -191,7 +191,12 @@ func (s *Store) TaskTimeline(ctx context.Context, actor model.Actor, taskID stri
 	}
 	items := make([]model.Checkpoint, 0, len(rows))
 	for _, row := range rows {
+		sessionID, err := sessionPointer(row.SessionID)
+		if err != nil {
+			return nil, err
+		}
 		items = append(items, model.Checkpoint{ID: row.ID, TaskID: row.TaskID,
+			SessionID:   sessionID,
 			TaskVersion: row.TaskVersion, Kind: row.Kind, Summary: row.Summary,
 			Completed: row.Completed, Remaining: row.Remaining, Warnings: row.Warnings,
 			ChangedPaths: row.ChangedPaths, TestResults: row.TestResults,
@@ -213,10 +218,15 @@ func (s *Store) LatestHandoff(ctx context.Context, actor model.Actor, taskID str
 	if err != nil {
 		return model.Checkpoint{}, dbError(err)
 	}
+	sessionID, err := sessionPointer(row.SessionID)
+	if err != nil {
+		return model.Checkpoint{}, err
+	}
 	if err := s.auditRead(ctx, actor, "handoff.read", "task", taskID); err != nil {
 		return model.Checkpoint{}, err
 	}
 	return model.Checkpoint{ID: row.ID, TaskID: row.TaskID,
+		SessionID:   sessionID,
 		TaskVersion: row.TaskVersion, Kind: row.Kind, Summary: row.Summary,
 		Completed: row.Completed, Remaining: row.Remaining, Warnings: row.Warnings,
 		ChangedPaths: row.ChangedPaths, TestResults: row.TestResults,
@@ -257,6 +267,24 @@ func textPointer(value pgtype.Text) *string {
 		return nil
 	}
 	return &value.String
+}
+
+func nonemptyPointer(value string) *string {
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func sessionPointer(value any) (*string, error) {
+	switch typed := value.(type) {
+	case string:
+		return nonemptyPointer(typed), nil
+	case []byte:
+		return nonemptyPointer(string(typed)), nil
+	default:
+		return nil, fmt.Errorf("unexpected session ID type %T", value)
+	}
 }
 
 func dbError(err error) error {

@@ -199,7 +199,7 @@ func (q *Queries) GetTokenSpaces(ctx context.Context, tokenID pgtype.UUID) ([]Ge
 }
 
 const latestHandoff = `-- name: LatestHandoff :one
-SELECT id::text AS id, task_id::text AS task_id, task_version, kind, summary,
+SELECT id::text AS id, task_id::text AS task_id, COALESCE(session_id::text, '') AS session_id, task_version, kind, summary,
     completed, remaining, warnings, changed_paths, test_results,
     source_revision, created_by_principal::text AS created_by_principal,
     created_by_client::text AS created_by_client, created_at
@@ -210,6 +210,7 @@ ORDER BY task_version DESC LIMIT 1
 type LatestHandoffRow struct {
 	ID                 string
 	TaskID             string
+	SessionID          interface{}
 	TaskVersion        int64
 	Kind               string
 	Summary            string
@@ -230,6 +231,7 @@ func (q *Queries) LatestHandoff(ctx context.Context, taskID pgtype.UUID) (Latest
 	err := row.Scan(
 		&i.ID,
 		&i.TaskID,
+		&i.SessionID,
 		&i.TaskVersion,
 		&i.Kind,
 		&i.Summary,
@@ -296,7 +298,7 @@ func (q *Queries) ListTasks(ctx context.Context, projectID pgtype.UUID) ([]ListT
 }
 
 const taskTimeline = `-- name: TaskTimeline :many
-SELECT id::text AS id, task_id::text AS task_id, task_version, kind, summary,
+SELECT id::text AS id, task_id::text AS task_id, COALESCE(session_id::text, '') AS session_id, task_version, kind, summary,
     completed, remaining, warnings, changed_paths, test_results,
     source_revision, created_by_principal::text AS created_by_principal,
     created_by_client::text AS created_by_client, created_at
@@ -307,6 +309,7 @@ ORDER BY task_version DESC LIMIT 50
 type TaskTimelineRow struct {
 	ID                 string
 	TaskID             string
+	SessionID          interface{}
 	TaskVersion        int64
 	Kind               string
 	Summary            string
@@ -333,6 +336,7 @@ func (q *Queries) TaskTimeline(ctx context.Context, taskID pgtype.UUID) ([]TaskT
 		if err := rows.Scan(
 			&i.ID,
 			&i.TaskID,
+			&i.SessionID,
 			&i.TaskVersion,
 			&i.Kind,
 			&i.Summary,

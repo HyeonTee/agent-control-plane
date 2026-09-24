@@ -37,6 +37,7 @@ type Checkpoint struct {
 	IdempotencyKey     string
 	RequestDigest      []byte
 	CreatedAt          pgtype.Timestamptz
+	SessionID          pgtype.UUID
 }
 
 type ClientToken struct {
@@ -78,6 +79,13 @@ type Project struct {
 	UpdatedAt           pgtype.Timestamptz
 }
 
+type SessionEntry struct {
+	SessionID    pgtype.UUID
+	Sequence     int64
+	CheckpointID pgtype.UUID
+	CreatedAt    pgtype.Timestamptz
+}
+
 type Space struct {
 	ID                pgtype.UUID
 	Name              string
@@ -95,4 +103,19 @@ type Task struct {
 	BaseRevision pgtype.Text
 	CreatedAt    pgtype.Timestamptz
 	UpdatedAt    pgtype.Timestamptz
+}
+
+type WorkSession struct {
+	ID                     pgtype.UUID
+	TaskID                 pgtype.UUID
+	CreatedByPrincipal     pgtype.UUID
+	CreatedByClient        pgtype.UUID
+	ClientLabel            pgtype.Text
+	SourceSessionReference pgtype.Text
+	ResumedFromHandoffID   pgtype.UUID
+	StartedAt              pgtype.Timestamptz
+	EndedAt                pgtype.Timestamptz
+	LastActivityAt         pgtype.Timestamptz
+	Summary                pgtype.Text
+	EntryCount             int64
 }

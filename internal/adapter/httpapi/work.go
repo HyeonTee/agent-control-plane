@@ -18,9 +18,11 @@ type apiError struct {
 	Message string `json:"message"`
 }
 
+type actorRoute func(http.ResponseWriter, *http.Request, model.Actor)
+
 func registerWorkRoutes(mux *http.ServeMux, backend Backend) {
 	service := appwork.New(backend)
-	withActor := func(next func(http.ResponseWriter, *http.Request, model.Actor)) http.HandlerFunc {
+	withActor := func(next actorRoute) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Cache-Control", "no-store")
 			authorizations := r.Header.Values("Authorization")
@@ -99,6 +101,7 @@ func registerWorkRoutes(mux *http.ServeMux, backend Backend) {
 	}))
 	mux.HandleFunc("POST /api/v1/tasks/{task_id}/checkpoints", withActor(func(w http.ResponseWriter, r *http.Request, actor model.Actor) {
 		var body struct {
+			SessionID       *string  `json:"session_id"`
 			ExpectedVersion int64    `json:"expected_version"`
 			Kind            string   `json:"kind"`
 			Summary         string   `json:"summary"`
@@ -118,7 +121,7 @@ func registerWorkRoutes(mux *http.ServeMux, backend Backend) {
 			return
 		}
 		checkpoint, err := service.AppendCheckpoint(r.Context(), actor, model.AppendCheckpointInput{
-			TaskID: r.PathValue("task_id"), ExpectedVersion: body.ExpectedVersion,
+			TaskID: r.PathValue("task_id"), SessionID: body.SessionID, ExpectedVersion: body.ExpectedVersion,
 			IdempotencyKey: keys[0], Kind: body.Kind, Summary: body.Summary,
 			Completed: body.Completed, Remaining: body.Remaining, Warnings: body.Warnings,
 			ChangedPaths: body.ChangedPaths, TestResults: body.TestResults,
@@ -146,6 +149,7 @@ func registerWorkRoutes(mux *http.ServeMux, backend Backend) {
 		}
 		writeJSON(w, http.StatusOK, item)
 	}))
+	registerDiscoveryRoutes(mux, service, withActor)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
