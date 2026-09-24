@@ -27,7 +27,7 @@ The Hub instance role grants access only to the Hub's own infrastructure.
 
 ## Sync policy
 
-Every project has an explicit sync policy. An agent or integration must check it before sending data, and the Hub enforces allowed request types, declared classification, schema, and size. The Hub cannot prove that arbitrary free text was sanitized before upload. A policy that requires reliable local filtering needs a reviewed local adapter or a human review step; it must not be represented as server-enforced redaction.
+Every project has an explicit sync policy. An agent or integration must check it before sending data. The current API accepts only `metadata_and_handoffs` for hosted projects, validates request shape and size, and has no fields for source files or diffs. It does not classify or redact arbitrary free text inside a checkpoint. A policy that requires reliable local filtering needs a reviewed local adapter or a human review step; it must not be represented as server-enforced redaction.
 
 Example:
 
@@ -103,7 +103,7 @@ Downloading a package does not authorize execution. The agent integration or opt
 - S3 buckets block public access and use encryption at rest.
 - Sensitive fields are excluded from logs and audit metadata.
 - Sensitive context responses use `Cache-Control: no-store`, and proxy logs never record authorization headers or request bodies.
-- Request bodies, result sizes, page sizes, and request rates have explicit limits. Unexpected fields and unsupported content types are rejected.
+- Request bodies have a 64 KiB limit. Unexpected fields and unsupported content types are rejected. Result and request-rate limits are still required before public deployment.
 - Browser cross-origin access is disabled unless a specific trusted origin and credential flow are designed.
 
 ## Audit
@@ -121,7 +121,7 @@ timestamp
 redacted metadata
 ```
 
-The actor and client ID are derived from authentication. A caller-provided value such as `codex` or `claude` may be recorded as client metadata but is never trusted as identity. Authentication failures, token changes, writes, and sensitive context reads are auditable without storing request or response bodies or bearer tokens.
+The actor and client ID are derived from authentication. A caller-provided value such as `codex` or `claude` may be recorded as client metadata but is never trusted as identity. The current implementation records token changes, successful writes, and successful context reads in the database. Invalid token attempts are logged without the token value. Failed authorized operations still need consistent audit records before public deployment; audit records must never store request or response bodies or bearer tokens.
 
 ## Backup and recovery
 

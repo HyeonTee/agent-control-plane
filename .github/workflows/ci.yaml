@@ -7,6 +7,20 @@ on:
 jobs:
   go:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: hub_test
+          POSTGRES_USER: hub
+          POSTGRES_PASSWORD: local-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hub -d hub_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -17,6 +31,8 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Test
+        env:
+          HUB_TEST_DATABASE_URL: postgres://hub:local-test-only@localhost:5432/hub_test?sslmode=disable
         run: go test ./...
       - name: Build
         run: go build ./cmd/hub

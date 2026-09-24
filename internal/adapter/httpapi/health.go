@@ -6,13 +6,20 @@ import (
 	"time"
 
 	"github.com/HyeonTee/agent-control-plane/api"
+	appwork "github.com/HyeonTee/agent-control-plane/internal/application/work"
+	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
 )
 
 type Pinger interface {
 	Ping(context.Context) error
 }
 
-func NewHandler(db Pinger) http.Handler {
+type Backend interface {
+	appwork.Store
+	Authenticate(context.Context, string) (model.Actor, error)
+}
+
+func NewHandler(db Pinger, backend Backend) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -31,5 +38,8 @@ func NewHandler(db Pinger) http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
+	if backend != nil {
+		registerWorkRoutes(mux, backend)
+	}
 	return mux
 }
