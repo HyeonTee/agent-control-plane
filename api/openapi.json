@@ -76,7 +76,7 @@
         },
         "responses": {
           "200": {
-            "description": "Show user_code and verification_uri to the human; keep device_code private to this client",
+            "description": "Send the human to verification_uri_complete (or verification_uri plus user_code) and show user_code for comparison; keep device_code private to this client",
             "content": {
               "application/json": {
                 "schema": {
@@ -86,6 +86,7 @@
                     "device_code": {"type": "string"},
                     "user_code": {"type": "string"},
                     "verification_uri": {"type": "string", "format": "uri"},
+                    "verification_uri_complete": {"type": "string", "format": "uri", "description": "verification_uri with the user code prefilled; the owner still confirms the code before approving"},
                     "expires_in": {"type": "integer"},
                     "interval": {"type": "integer"}
                   }

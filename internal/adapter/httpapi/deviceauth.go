@@ -62,7 +62,6 @@ func (h *DeviceAuthHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /activate", h.activate)
 	mux.HandleFunc("GET /auth/github/start", h.githubStart)
 	mux.HandleFunc("GET /auth/github/callback", h.githubCallback)
-	mux.HandleFunc("POST /activate/lookup", h.lookup)
 	mux.HandleFunc("POST /activate/decision", h.decision)
 	mux.HandleFunc("GET /devices", h.devices)
 	mux.HandleFunc("POST /devices/revoke", h.revokeDevice)
@@ -123,8 +122,9 @@ func (h *DeviceAuthHandler) startDevice(w http.ResponseWriter, r *http.Request) 
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"device_code": started.DeviceCode, "user_code": started.UserCode,
-		"verification_uri": h.config.PublicURL + "/activate",
-		"expires_in":       600, "interval": 5,
+		"verification_uri":          h.config.PublicURL + "/activate",
+		"verification_uri_complete": h.config.PublicURL + "/activate?code=" + url.QueryEscape(started.UserCode),
+		"expires_in":                600, "interval": 5,
 	})
 }
 
@@ -196,7 +196,7 @@ func (h *DeviceAuthHandler) githubCallback(w http.ResponseWriter, r *http.Reques
 	if err != nil || len(stateCookie.Value) != 43 || len(r.URL.Query()["state"]) != 1 || len(r.URL.Query()["code"]) != 1 ||
 		len(r.URL.Query().Get("state")) != 43 || r.URL.Query().Get("code") == "" ||
 		!hmac.Equal([]byte(stateCookie.Value), []byte(r.URL.Query().Get("state"))) {
-		http.Error(w, "login request expired", http.StatusBadRequest)
+		h.page(w, http.StatusBadRequest, activationView{Message: "Your GitHub sign-in took too long or was already used. Enter the code to try again."})
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: "hub_oauth_state", Path: "/auth/github", MaxAge: -1,
@@ -204,31 +204,43 @@ func (h *DeviceAuthHandler) githubCallback(w http.ResponseWriter, r *http.Reques
 	githubToken, err := h.exchangeGitHubCode(r.Context(), r.URL.Query().Get("code"))
 	if err != nil {
 		slog.Warn("GitHub login exchange failed", "error", err)
-		http.Error(w, "GitHub login failed", http.StatusBadGateway)
+		h.page(w, http.StatusBadGateway, activationView{Message: "GitHub sign-in failed. Enter the code to try again."})
 		return
 	}
 	id, err := h.githubUserID(r.Context(), githubToken)
 	if err != nil {
 		slog.Warn("GitHub identity check failed", "error", err)
-		http.Error(w, "GitHub login failed", http.StatusBadGateway)
+		h.page(w, http.StatusBadGateway, activationView{Message: "GitHub sign-in failed. Enter the code to try again."})
 		return
 	}
 	if id != h.config.OwnerID {
-		http.Error(w, "account not allowed", http.StatusForbidden)
+		h.page(w, http.StatusForbidden, activationView{Done: true,
+			Message: "This GitHub account is not allowed to approve agents for this Hub. Sign out of GitHub and use the owner account."})
 		return
 	}
 	nonceBytes := make([]byte, 24)
 	if _, err := rand.Read(nonceBytes); err != nil {
-		http.Error(w, "request failed", http.StatusInternalServerError)
+		h.page(w, http.StatusInternalServerError, activationView{Message: "Something went wrong. Try again."})
 		return
 	}
 	payload := fmt.Sprintf("%d:%s", time.Now().Add(30*time.Minute).Unix(), base64.RawURLEncoding.EncodeToString(nonceBytes))
 	mac := hmac.New(sha256.New, h.key)
 	mac.Write([]byte(payload))
 	value := base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	// Lax, not Strict: browsers withhold Strict cookies on the redirect that
+	// ends GitHub's cross-site login, which left the owner signed out on
+	// arrival. State-changing forms still require the CSRF token.
 	http.SetCookie(w, &http.Cookie{Name: "hub_owner_session", Value: value, Path: "/",
-		HttpOnly: true, Secure: h.secureCookie(), SameSite: http.SameSiteStrictMode, MaxAge: 1800})
-	http.Redirect(w, r, "/activate", http.StatusSeeOther)
+		HttpOnly: true, Secure: h.secureCookie(), SameSite: http.SameSiteLaxMode, MaxAge: 1800})
+	target := "/activate"
+	if pending, err := r.Cookie("hub_pending_code"); err == nil {
+		if code := deviceauth.NormalizeUserCode(pending.Value); code != "" {
+			target += "?code=" + url.QueryEscape(code)
+		}
+		http.SetCookie(w, &http.Cookie{Name: "hub_pending_code", Path: "/auth/github", MaxAge: -1,
+			HttpOnly: true, Secure: h.secureCookie(), SameSite: http.SameSiteLaxMode})
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func (h *DeviceAuthHandler) exchangeGitHubCode(ctx context.Context, code string) (string, error) {
@@ -330,18 +342,19 @@ type activationView struct {
 	Scopes        string
 	Message       string
 	Confirm       bool
+	Done          bool
 }
 
 var activationTemplate = template.Must(template.New("activate").Parse(`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Connect an agent</title><style>body{font:16px system-ui,sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem;color:#17212b}input,button{font:inherit;padding:.65rem}input{width:11rem}button{cursor:pointer}main{border:1px solid #ccd5dd;border-radius:12px;padding:1.5rem}p{line-height:1.5}.actions{display:flex;gap:.7rem}</style></head>
+<title>Connect an agent</title><style>body{font:16px system-ui,sans-serif;max-width:36rem;margin:4rem auto;padding:0 1rem;color:#17212b}input,button{font:inherit;padding:.65rem}input{width:11rem;text-transform:uppercase;letter-spacing:.08em}button{cursor:pointer}main{border:1px solid #ccd5dd;border-radius:12px;padding:1.5rem}p{line-height:1.5}.actions{display:flex;gap:.7rem}.status{padding:.75rem 1rem;border-radius:8px;background:#eef3f7}.code{font:600 1.5rem ui-monospace,monospace;letter-spacing:.1em}</style></head>
 <body><main><h1>Connect an agent</h1>
-{{if .Message}}<p role="status">{{.Message}}</p>{{end}}
-{{if not .Authenticated}}<p>Sign in with GitHub to approve a code shown by your agent.</p><p><a href="/auth/github/start">Sign in with GitHub</a></p>
-{{else if .Confirm}}<p><strong>{{.Label}}</strong> requests access to your personal space.</p><p>Requested permissions: <strong>{{.Scopes}}</strong>.</p><p>Only approve if the code <strong>{{.Code}}</strong> matches the code shown by your agent.</p>
+{{if .Message}}<p class="status" role="status">{{.Message}}</p>{{end}}
+{{if .Confirm}}<p><strong>{{.Label}}</strong> requests access to your personal space.</p><p>Requested permissions: <strong>{{.Scopes}}</strong>.</p><p>Code: <span class="code">{{.Code}}</span></p><p>Only approve if this matches the code shown by your agent and you started this request.</p>
 <form method="post" action="/activate/decision"><input type="hidden" name="csrf" value="{{.CSRF}}"><input type="hidden" name="code" value="{{.Code}}"><div class="actions"><button name="decision" value="approve">Approve</button><button name="decision" value="deny">Deny</button></div></form>
-{{else}}<p>Enter the one-time code shown by your agent. It expires after ten minutes.</p><form method="post" action="/activate/lookup"><input type="hidden" name="csrf" value="{{.CSRF}}"><label>Code <input name="code" autocomplete="off" required placeholder="ABCD-1234"></label><button>Continue</button></form>{{end}}
-{{if .Authenticated}}<p><a href="/devices">Manage connected devices</a></p>{{end}}
+{{else if not .Done}}<p>Enter the one-time code shown by your agent. It expires after ten minutes.{{if not .Authenticated}} You will sign in with GitHub next.{{end}}</p>
+<form method="get" action="/activate"><label>Code <input name="code" autocomplete="off" autocapitalize="characters" spellcheck="false" required placeholder="ABCD-EFGH"></label> <button>Continue</button></form>{{end}}
+{{if .Authenticated}}<p><a href="/devices">Manage connected devices</a></p>{{else if not .Done}}<p><a href="/auth/github/start">Sign in to manage connected devices</a></p>{{end}}
 </main></body></html>`))
 
 type devicesView struct {
@@ -357,18 +370,52 @@ var devicesTemplate = template.Must(template.New("devices").Parse(`<!doctype htm
 {{if .RevokedAt}}Revoked{{else}}Refresh expires {{.ExpiresAt.Format "2006-01-02"}}<form method="post" action="/devices/revoke"><input type="hidden" name="csrf" value="{{$.CSRF}}"><input type="hidden" name="id" value="{{.ID}}"><button>Revoke this device</button></form>{{end}}</li>{{end}}</ul>{{end}}
 </main></body></html>`))
 
-func (h *DeviceAuthHandler) page(w http.ResponseWriter, view activationView) {
+func (h *DeviceAuthHandler) page(w http.ResponseWriter, status int, view activationView) {
 	deviceHeaders(w)
 	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
 	if err := activationTemplate.Execute(w, view); err != nil {
 		slog.Error("activation page failed", "error", err)
 	}
 }
 
+// activate serves the code form and, given ?code=, the approval screen. The
+// code may arrive from verification_uri_complete before the owner has signed
+// in; it is then held in a short-lived cookie across the GitHub login.
 func (h *DeviceAuthHandler) activate(w http.ResponseWriter, r *http.Request) {
 	nonce := h.sessionNonce(r)
-	h.page(w, activationView{Authenticated: nonce != "", CSRF: h.csrf(nonce)})
+	view := activationView{Authenticated: nonce != "", CSRF: h.csrf(nonce)}
+	if !r.URL.Query().Has("code") {
+		h.page(w, http.StatusOK, view)
+		return
+	}
+	code := deviceauth.NormalizeUserCode(r.URL.Query().Get("code"))
+	if code == "" {
+		view.Message = "That does not look like a code. Codes have eight letters and digits, like ABCD-EFGH."
+		h.page(w, http.StatusOK, view)
+		return
+	}
+	if nonce == "" {
+		http.SetCookie(w, &http.Cookie{Name: "hub_pending_code", Value: code, Path: "/auth/github",
+			HttpOnly: true, Secure: h.secureCookie(), SameSite: http.SameSiteLaxMode, MaxAge: 600})
+		http.Redirect(w, r, "/auth/github/start", http.StatusSeeOther)
+		return
+	}
+	device, err := h.backend.FindDevice(r.Context(), code)
+	if errors.Is(err, model.ErrNotFound) {
+		view.Message = "Code " + code + " was not found or has expired. Ask your agent for a new code."
+		h.page(w, http.StatusOK, view)
+		return
+	}
+	if err != nil {
+		slog.Error("activation lookup failed", "error", err)
+		view.Message = "Something went wrong. Try again."
+		h.page(w, http.StatusInternalServerError, view)
+		return
+	}
+	view.Confirm, view.Code, view.Label, view.Scopes = true, device.UserCode, device.Label, strings.Join(device.Scopes, ", ")
+	h.page(w, http.StatusOK, view)
 }
 
 func (h *DeviceAuthHandler) browserForm(w http.ResponseWriter, r *http.Request) (string, bool) {
@@ -382,57 +429,41 @@ func (h *DeviceAuthHandler) browserForm(w http.ResponseWriter, r *http.Request) 
 		return "", false
 	}
 	if !hmac.Equal([]byte(singleForm(r, "csrf")), []byte(h.csrf(nonce))) {
-		http.Error(w, "invalid request", http.StatusForbidden)
+		h.page(w, http.StatusForbidden, activationView{Authenticated: true, CSRF: h.csrf(nonce),
+			Message: "This form expired. Enter the code again."})
 		return "", false
 	}
 	return nonce, true
 }
 
-func (h *DeviceAuthHandler) lookup(w http.ResponseWriter, r *http.Request) {
-	nonce, ok := h.browserForm(w, r)
-	if !ok {
-		return
-	}
-	code := strings.ToUpper(strings.TrimSpace(singleForm(r, "code")))
-	device, err := h.backend.FindDevice(r.Context(), code)
-	if errors.Is(err, model.ErrNotFound) {
-		h.page(w, activationView{Authenticated: true, CSRF: h.csrf(nonce), Message: "Code not found or expired."})
-		return
-	}
-	if err != nil {
-		slog.Error("activation lookup failed", "error", err)
-		http.Error(w, "request failed", http.StatusInternalServerError)
-		return
-	}
-	h.page(w, activationView{Authenticated: true, CSRF: h.csrf(nonce), Confirm: true,
-		Code: device.UserCode, Label: device.Label, Scopes: strings.Join(device.Scopes, ", ")})
-}
-
 func (h *DeviceAuthHandler) decision(w http.ResponseWriter, r *http.Request) {
-	_, ok := h.browserForm(w, r)
+	nonce, ok := h.browserForm(w, r)
 	if !ok {
 		return
 	}
 	decision := singleForm(r, "decision")
 	if decision != "approve" && decision != "deny" {
-		http.Error(w, "invalid decision", http.StatusBadRequest)
+		h.page(w, http.StatusBadRequest, activationView{Authenticated: true, CSRF: h.csrf(nonce),
+			Message: "Choose Approve or Deny."})
 		return
 	}
 	err := h.backend.DecideDevice(r.Context(), singleForm(r, "code"), decision == "approve")
 	if errors.Is(err, model.ErrNotFound) {
-		http.Error(w, "code not found or expired", http.StatusNotFound)
+		h.page(w, http.StatusNotFound, activationView{Authenticated: true, CSRF: h.csrf(nonce),
+			Message: "That code was not found or has expired. Ask your agent for a new code."})
 		return
 	}
 	if err != nil {
 		slog.Error("activation decision failed", "error", err)
-		http.Error(w, "request failed", http.StatusInternalServerError)
+		h.page(w, http.StatusInternalServerError, activationView{Authenticated: true, CSRF: h.csrf(nonce),
+			Message: "Something went wrong. Try again."})
 		return
 	}
 	message := "Connection denied. You can return to your agent."
 	if decision == "approve" {
 		message = "Connection approved. You can return to your agent."
 	}
-	h.page(w, activationView{Authenticated: true, Message: message})
+	h.page(w, http.StatusOK, activationView{Authenticated: true, Done: true, Message: message})
 }
 
 func (h *DeviceAuthHandler) devices(w http.ResponseWriter, r *http.Request) {

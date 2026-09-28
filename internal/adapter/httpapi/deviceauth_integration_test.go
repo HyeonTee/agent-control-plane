@@ -75,6 +75,71 @@ func TestGitHubApprovalRejectsWrongStateAndUnlistedOwner(t *testing.T) {
 	}
 }
 
+func TestActivationKeepsPrefilledCodeAcrossGitHubLogin(t *testing.T) {
+	auth, err := httpapi.NewDeviceAuthHandler(appdevice.New(postgres.NewDeviceAuthStore(nil)), httpapi.DeviceAuthConfig{
+		PublicURL: "http://localhost:8080", ClientID: "test-github-app", ClientSecret: "test-secret", OwnerID: 42,
+	}, &http.Client{Transport: fakeGitHubTransport{userID: 42}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	auth.Register(mux)
+	serve := func(target string, cookies ...*http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		for _, cookie := range cookies {
+			req.AddCookie(cookie)
+		}
+		result := httptest.NewRecorder()
+		mux.ServeHTTP(result, req)
+		return result
+	}
+	cookie := func(result *httptest.ResponseRecorder, name string) *http.Cookie {
+		t.Helper()
+		for _, cookie := range result.Result().Cookies() {
+			if cookie.Name == name {
+				return cookie
+			}
+		}
+		t.Fatalf("response omitted %s cookie", name)
+		return nil
+	}
+
+	signedOut := serve("/activate")
+	if signedOut.Code != http.StatusOK || !strings.Contains(signedOut.Body.String(), `name="code"`) {
+		t.Fatalf("signed-out activation page hides the code field: %d %s", signedOut.Code, signedOut.Body)
+	}
+	malformed := serve("/activate?code=ABC")
+	if malformed.Code != http.StatusOK || !strings.Contains(malformed.Body.String(), "does not look like a code") ||
+		len(malformed.Result().Cookies()) != 0 {
+		t.Fatalf("malformed code = %d %s", malformed.Code, malformed.Body)
+	}
+	prefilled := serve("/activate?code=abcd%20efg2")
+	if prefilled.Code != http.StatusSeeOther || prefilled.Header().Get("Location") != "/auth/github/start" {
+		t.Fatalf("signed-out prefilled code = %d %s", prefilled.Code, prefilled.Header().Get("Location"))
+	}
+	pending := cookie(prefilled, "hub_pending_code")
+	if pending.Value != "ABCD-EFG2" || !pending.HttpOnly || pending.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("pending code cookie = %+v", pending)
+	}
+	state := cookie(serve("/auth/github/start"), "hub_oauth_state")
+	callback := serve("/auth/github/callback?code=valid&state="+url.QueryEscape(state.Value), state, pending)
+	if callback.Code != http.StatusSeeOther || callback.Header().Get("Location") != "/activate?code=ABCD-EFG2" {
+		t.Fatalf("callback = %d %s", callback.Code, callback.Header().Get("Location"))
+	}
+	if cookie(callback, "hub_pending_code").MaxAge >= 0 {
+		t.Fatal("callback kept the pending code cookie")
+	}
+	// Browsers withhold Strict cookies on the redirect that ends a cross-site login.
+	if session := cookie(callback, "hub_owner_session"); session.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("owner session SameSite = %v", session.SameSite)
+	}
+	expired := serve("/auth/github/callback?code=valid&state=wrong", state)
+	if expired.Code != http.StatusBadRequest || !strings.Contains(expired.Body.String(), `name="code"`) {
+		t.Fatalf("expired login page offers no retry: %d %s", expired.Code, expired.Body)
+	}
+}
+
 func TestDeviceAuthorizationRequiresBrowserApprovalAndRotatesRefresh(t *testing.T) {
 	databaseURL := os.Getenv("HUB_TEST_DATABASE_URL")
 	if databaseURL == "" {
@@ -164,7 +229,8 @@ func TestDeviceAuthorizationRequiresBrowserApprovalAndRotatesRefresh(t *testing.
 		"client_id": {"agent-control-plane"}, "client_label": {"Claude on laptop"},
 		"scope": {"context:read work:write"},
 	})
-	if start.StatusCode != 200 || data["verification_uri"] != "http://localhost:8080/activate" {
+	if start.StatusCode != 200 || data["verification_uri"] != "http://localhost:8080/activate" ||
+		data["verification_uri_complete"] != "http://localhost:8080/activate?code="+url.QueryEscape(data["user_code"].(string)) {
 		t.Fatalf("start = %d %v", start.StatusCode, data)
 	}
 	deviceCode := data["device_code"].(string)
@@ -193,15 +259,19 @@ func TestDeviceAuthorizationRequiresBrowserApprovalAndRotatesRefresh(t *testing.
 	if session == nil {
 		t.Fatal("callback omitted owner session")
 	}
-	_, page := get("/activate", session)
-	csrfMatch := regexp.MustCompile(`name="csrf" value="([^"]+)"`).FindStringSubmatch(page)
+	typed := strings.ToLower(strings.ReplaceAll(userCode, "-", " "))
+	lookup, confirm := get("/activate?code="+url.QueryEscape(typed), session)
+	if lookup.StatusCode != 200 || !strings.Contains(confirm, "Claude on laptop") || !strings.Contains(confirm, userCode) {
+		t.Fatalf("lookup = %d %s", lookup.StatusCode, confirm)
+	}
+	csrfMatch := regexp.MustCompile(`name="csrf" value="([^"]+)"`).FindStringSubmatch(confirm)
 	if len(csrfMatch) != 2 {
-		t.Fatal("activation page omitted CSRF token")
+		t.Fatal("approval page omitted CSRF token")
 	}
 	csrf := csrfMatch[1]
-	lookup, _ := form("/activate/lookup", url.Values{"csrf": {csrf}, "code": {userCode}}, session)
-	if lookup.StatusCode != 200 {
-		t.Fatalf("lookup = %d", lookup.StatusCode)
+	missing, missingPage := get("/activate?code=AAAA-AAAA", session)
+	if missing.StatusCode != 200 || !strings.Contains(missingPage, "not found or has expired") {
+		t.Fatalf("unknown code = %d %s", missing.StatusCode, missingPage)
 	}
 	bad, _ := form("/activate/decision", url.Values{
 		"csrf": {"wrong"}, "code": {userCode}, "decision": {"approve"},

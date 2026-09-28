@@ -80,8 +80,8 @@ func (s *DeviceAuthStore) StartDevice(ctx context.Context, label string, scopes 
 }
 
 func (s *DeviceAuthStore) FindDevice(ctx context.Context, userCode string) (DeviceAuthorization, error) {
-	userCode = strings.ToUpper(strings.TrimSpace(userCode))
-	if len(userCode) != 9 {
+	userCode = deviceauth.NormalizeUserCode(userCode)
+	if userCode == "" {
 		return DeviceAuthorization{}, model.ErrNotFound
 	}
 	digest := sha256.Sum256([]byte(userCode))
@@ -97,8 +97,8 @@ func (s *DeviceAuthStore) FindDevice(ctx context.Context, userCode string) (Devi
 }
 
 func (s *DeviceAuthStore) DecideDevice(ctx context.Context, userCode string, approve bool) error {
-	userCode = strings.ToUpper(strings.TrimSpace(userCode))
-	if len(userCode) != 9 {
+	userCode = deviceauth.NormalizeUserCode(userCode)
+	if userCode == "" {
 		return model.ErrNotFound
 	}
 	digest := sha256.Sum256([]byte(userCode))

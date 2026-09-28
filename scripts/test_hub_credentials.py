@@ -33,11 +33,12 @@ class CredentialBridgeTest(unittest.TestCase):
             try:
                 output = io.StringIO()
                 with contextlib.redirect_stdout(output):
-                    bridge.start(types.SimpleNamespace(label="Claude", scope="context:read"))
+                    bridge.start(types.SimpleNamespace(label="Claude", scope="context:read", no_browser=True))
                     bridge.finish(None)
             finally:
                 bridge.form = original_form
             self.assertIn("ABCD-1234", output.getvalue())
+            self.assertIn("https://agent.gwinam.com/activate?code=ABCD-1234", output.getvalue())
             self.assertNotIn("private-device-code", output.getvalue())
             self.assertNotIn("private-access", output.getvalue())
             self.assertNotIn("private-refresh", output.getvalue())

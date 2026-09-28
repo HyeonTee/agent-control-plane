@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Optional local credential bridge for agents without native OAuth storage.
 
-Only verification URI and user code are printed during login. Long-lived
+Only the approval link and user code are printed during login. Long-lived
 credentials stay in a mode-0600 file outside the repository and model output.
 """
 
 import argparse
+import contextlib
 import fcntl
 import json
 import os
@@ -13,8 +14,9 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+import webbrowser
 from urllib.error import HTTPError
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
@@ -121,9 +123,14 @@ def start(args):
             "device_code": result["device_code"], "expires_at": time.time() + result["expires_in"],
             "interval": result["interval"], "origin": BASE_URL,
         })
-        print("Open:", result["verification_uri"])
-        print("Enter code:", result["user_code"])
+        # Built locally so the link can only point at the checked Hub origin.
+        link = BASE_URL + "/activate?code=" + quote(result["user_code"])
+        print("Approve in your browser:", link)
+        print("Confirm the page shows code:", result["user_code"])
         print("Then run: python3 scripts/hub-credentials.py finish")
+        if not args.no_browser:
+            with contextlib.suppress(webbrowser.Error):
+                webbrowser.open(link)
     locked(run)
 
 
@@ -206,6 +213,7 @@ def main():
     start_parser = commands.add_parser("start")
     start_parser.add_argument("--label", required=True)
     start_parser.add_argument("--scope", default="context:read")
+    start_parser.add_argument("--no-browser", action="store_true", help="print the approval link without opening it")
     start_parser.set_defaults(action=start)
     commands.add_parser("finish").set_defaults(action=finish)
     api_parser = commands.add_parser("api")
