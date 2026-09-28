@@ -113,7 +113,7 @@ Success means that work started with one agent can be resumed from another compu
 
 `ctx` and MCP adapter packages are added only if their use cases justify them.
 
-The repository now contains the work-continuity and work-discovery APIs. Bootstrap context assembly, skill registry, and production deployment remain on the roadmap.
+The repository contains the work-continuity and work-discovery APIs. Browser-approved device authorization is available when GitHub OAuth settings are configured; it is not enabled in production until those settings are provisioned. Bootstrap context assembly and the skill registry remain on the roadmap.
 
 ## Run locally
 
@@ -187,6 +187,7 @@ The first deployment target is the existing EC2 instance described in [the deplo
 - [Domain model](docs/domain-model.md)
 - [Work discovery and session history](docs/work-discovery.md)
 - [Production cross-agent handoff](docs/production-handoff.md)
+- [Browser-approved device authorization](docs/device-authorization.md)
 - [Security and data boundaries](docs/security.md)
 - [Implementation roadmap](docs/roadmap.md)
 - [Architecture decision records](docs/adr/README.md)

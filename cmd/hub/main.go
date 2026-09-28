@@ -131,7 +131,17 @@ func run() error {
 	if err := postgres.Migrate(ctx, pool); err != nil {
 		return err
 	}
-	handler := httpapi.NewHandler(pool, postgres.NewStore(pool))
+	var deviceAuth *httpapi.DeviceAuthHandler
+	if cfg.GitHubClientID != "" {
+		deviceAuth, err = httpapi.NewDeviceAuthHandler(postgres.NewDeviceAuthStore(pool), httpapi.DeviceAuthConfig{
+			PublicURL: cfg.PublicURL, ClientID: cfg.GitHubClientID,
+			ClientSecret: cfg.GitHubClientSecret, OwnerID: cfg.GitHubOwnerID,
+		}, nil)
+		if err != nil {
+			return err
+		}
+	}
+	handler := httpapi.NewHandlerWithDeviceAuth(pool, postgres.NewStore(pool), deviceAuth)
 	if cfg.OriginSecret != "" {
 		handler = httpapi.RequireOriginSecret(handler, cfg.OriginSecret)
 	}

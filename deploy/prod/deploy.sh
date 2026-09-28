@@ -11,11 +11,29 @@ param() { aws ssm get-parameter --name "/agent-control-plane/$1" --with-decrypti
 DB_PASSWORD="$(param db_password)"
 ORIGIN_SECRET="$(param origin_secret)"
 BACKUP_BUCKET="$(param backup_bucket)"
+GITHUB_CLIENT_ID=""
+GITHUB_CLIENT_SECRET=""
+GITHUB_OWNER_ID=""
+if ! GITHUB_CLIENT_ID="$(param github_client_id 2>&1)"; then
+  if [[ "$GITHUB_CLIENT_ID" == *"ParameterNotFound"* ]]; then
+    GITHUB_CLIENT_ID=""
+  else
+    echo "$GITHUB_CLIENT_ID" >&2
+    exit 1
+  fi
+fi
+if [ -n "$GITHUB_CLIENT_ID" ]; then
+  GITHUB_CLIENT_SECRET="$(param github_client_secret)"
+  GITHUB_OWNER_ID="$(param github_owner_id)"
+fi
 cat > .env <<EOF
 HUB_IMAGE=$IMAGE
 DB_PASSWORD=$DB_PASSWORD
 ORIGIN_SECRET=$ORIGIN_SECRET
 BACKUP_BUCKET=$BACKUP_BUCKET
+GITHUB_CLIENT_ID=$GITHUB_CLIENT_ID
+GITHUB_CLIENT_SECRET=$GITHUB_CLIENT_SECRET
+GITHUB_OWNER_ID=$GITHUB_OWNER_ID
 EOF
 chmod 600 .env
 mkdir -p pgdata tls

@@ -22,6 +22,10 @@ type Backend interface {
 }
 
 func NewHandler(db Pinger, backend Backend) http.Handler {
+	return NewHandlerWithDeviceAuth(db, backend, nil)
+}
+
+func NewHandlerWithDeviceAuth(db Pinger, backend Backend, auth *DeviceAuthHandler) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /openapi.json", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -42,6 +46,9 @@ func NewHandler(db Pinger, backend Backend) http.Handler {
 	})
 	if backend != nil {
 		registerWorkRoutes(mux, backend)
+	}
+	if auth != nil {
+		auth.Register(mux)
 	}
 	return requestid.Middleware(mux)
 }

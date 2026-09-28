@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Agent Control Plane API",
-    "version": "0.3.0",
-    "description": "Hosted Context Hub work-continuity API. Clients author work records; the Hub authenticates, validates, stores, and serves them without executing agents or generating summaries. Token provisioning is operator-only and is not exposed over HTTP."
+    "version": "0.4.0",
+    "description": "Hosted Context Hub work-continuity API. Clients author work records; the Hub authenticates, validates, stores, and serves them without executing agents or generating summaries. The initial owner is provisioned by an operator. Configured installations may request scoped device authorization through the browser approval flow."
   },
   "servers": [
     {
@@ -51,6 +51,92 @@
               }
             }
           }
+        }
+      }
+    },
+    "/oauth/device_authorization": {
+      "post": {
+        "operationId": "startDeviceAuthorization",
+        "summary": "Request a device code for browser approval",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["client_id", "client_label", "scope"],
+                "properties": {
+                  "client_id": {"type": "string", "const": "agent-control-plane"},
+                  "client_label": {"type": "string", "maxLength": 120},
+                  "scope": {"type": "string", "description": "Space-separated context:read and/or work:write"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Show user_code and verification_uri to the human; keep device_code private to this client",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["device_code", "user_code", "verification_uri", "expires_in", "interval"],
+                  "properties": {
+                    "device_code": {"type": "string"},
+                    "user_code": {"type": "string"},
+                    "verification_uri": {"type": "string", "format": "uri"},
+                    "expires_in": {"type": "integer"},
+                    "interval": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "Invalid client, scope, or request"}
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "operationId": "deviceToken",
+        "summary": "Poll for an approved device grant or rotate a refresh token",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "type": "object",
+                "required": ["client_id", "grant_type"],
+                "properties": {
+                  "client_id": {"type": "string", "const": "agent-control-plane"},
+                  "grant_type": {"type": "string", "enum": ["urn:ietf:params:oauth:grant-type:device_code", "refresh_token"]},
+                  "device_code": {"type": "string"},
+                  "refresh_token": {"type": "string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "One-time token response; store access and refresh tokens outside the agent transcript",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["access_token", "refresh_token", "token_type", "expires_in"],
+                  "properties": {
+                    "access_token": {"type": "string"},
+                    "refresh_token": {"type": "string"},
+                    "token_type": {"type": "string", "const": "Bearer"},
+                    "expires_in": {"type": "integer"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {"description": "authorization_pending, slow_down, access_denied, expired_token, or invalid_grant"}
         }
       }
     },

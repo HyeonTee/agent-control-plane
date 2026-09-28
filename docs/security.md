@@ -47,7 +47,7 @@ Supported policies must include a `local_only` mode. Such a project has no remot
 
 ## Authentication
 
-The first REST API uses client-specific opaque bearer tokens. A token identifies an integration or installation acting for a principal; a self-reported agent name is not an identity. Initial owner access and token provisioning use an operator-only path on the host. Public self-registration and unauthenticated token minting are excluded.
+The REST API uses client-specific opaque bearer tokens. A token identifies an integration or installation acting for a principal; a self-reported agent name is not an identity. Initial owner access uses an operator-only path on the host. When [browser-approved device authorization](device-authorization.md) is configured, the GitHub-verified owner can approve a scoped installation without host access. Public self-registration and unauthenticated token minting remain excluded.
 
 Each token has:
 
@@ -64,7 +64,7 @@ revoked_at
 
 Tokens are high-entropy random values, shown once, and sent only in an HTTPS `Authorization` header. They are never placed in a URL, OpenAPI description, repository file, agent prompt, or log. Each supported integration must have a secure credential configuration; clients without one are not given a token. A hosted agent integration that stores a token becomes part of the trust boundary, so issue a separate token per integration with only its required spaces and scopes. The Hub stores only a hash. Tokens expire and can be rotated or revoked independently. Read, checkpoint-write, and artifact-publish scopes are separate.
 
-OAuth or passkeys may replace this REST flow later without changing the domain authorization model. A future protected remote MCP endpoint must implement the authorization mechanism required by its selected MCP specification; a static REST token alone does not establish MCP client interoperability.
+Device authorization issues short-lived access tokens and rotating refresh tokens. The Hub stores their hashes and revokes a device grant if an already-used refresh token reappears. A credential-handling integration must keep device codes and token responses out of the agent transcript. A future protected remote MCP endpoint must implement the authorization mechanism required by its selected MCP specification; REST device authorization alone does not establish MCP client interoperability.
 
 ## Authorization
 
