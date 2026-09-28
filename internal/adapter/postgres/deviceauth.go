@@ -12,6 +12,7 @@ import (
 
 	deviceauth "github.com/HyeonTee/agent-control-plane/internal/domain/deviceauth"
 	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
+	"github.com/HyeonTee/agent-control-plane/internal/requestid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -51,25 +52,7 @@ func randomUserCode() (string, error) {
 	return encoded[:4] + "-" + encoded[4:], nil
 }
 
-func validDeviceScopes(scopes []string) bool {
-	if len(scopes) == 0 || len(scopes) > 2 {
-		return false
-	}
-	seen := map[string]bool{}
-	for _, scope := range scopes {
-		if (scope != model.ScopeRead && scope != model.ScopeWrite) || seen[scope] {
-			return false
-		}
-		seen[scope] = true
-	}
-	return true
-}
-
 func (s *DeviceAuthStore) StartDevice(ctx context.Context, label string, scopes []string) (DeviceAuthorization, error) {
-	label = strings.TrimSpace(label)
-	if label == "" || len(label) > 120 || !validDeviceScopes(scopes) {
-		return DeviceAuthorization{}, model.ErrInvalid
-	}
 	if _, err := s.pool.Exec(ctx, `DELETE FROM device_authorizations
 		WHERE device_code_digest IN (SELECT device_code_digest FROM device_authorizations
 		WHERE expires_at < now() ORDER BY expires_at LIMIT 1000)`); err != nil {
@@ -137,19 +120,21 @@ func (s *DeviceAuthStore) DecideDevice(ctx context.Context, userCode string, app
 	if approve {
 		status = "approved"
 	}
-	command, err := tx.Exec(ctx, `UPDATE device_authorizations SET status = $2,
+	var deviceID string
+	err = tx.QueryRow(ctx, `UPDATE device_authorizations SET status = $2,
 		principal_id = NULLIF($3, '')::uuid, space_id = NULLIF($4, '')::uuid
-		WHERE user_code_digest = $1 AND status = 'pending' AND expires_at > now()`,
-		digest[:], status, principalID, spaceID)
+		WHERE user_code_digest = $1 AND status = 'pending' AND expires_at > now()
+		RETURNING id::text`, digest[:], status, principalID, spaceID).Scan(&deviceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return model.ErrNotFound
+	}
 	if err != nil {
 		return err
 	}
-	if command.RowsAffected() != 1 {
-		return model.ErrNotFound
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO audit_events (principal_id, action, resource_type, result)
-		VALUES (NULLIF($1, '')::uuid, 'device.' || $2, 'device_authorization', 'success')`,
-		principalID, status); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_events
+		(principal_id, action, resource_type, resource_id, result, request_id)
+		VALUES ($1::uuid, 'device.' || $2, 'device_authorization', $3::uuid, 'success', $4)`,
+		principalID, status, deviceID, requestid.From(ctx)); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -232,11 +217,6 @@ func (s *DeviceAuthStore) RefreshDevice(ctx context.Context, refresh string) (De
 		return DeviceTokens{}, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `DELETE FROM device_refresh_used
-		WHERE secret_digest IN (SELECT secret_digest FROM device_refresh_used
-		WHERE used_at < now() - interval '90 days' ORDER BY used_at LIMIT 1000)`); err != nil {
-		return DeviceTokens{}, err
-	}
 	var tokenID string
 	var expires time.Time
 	err = tx.QueryRow(ctx, `SELECT token_id::text, expires_at FROM device_refresh_tokens
@@ -260,9 +240,9 @@ func (s *DeviceAuthStore) RefreshDevice(ctx context.Context, refresh string) (De
 			return DeviceTokens{}, err
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO audit_events
-			(principal_id, client_id, action, resource_type, resource_id, result)
-			SELECT principal_id, id, 'device.refresh_replay', 'client_token', id, 'revoked'
-			FROM client_tokens WHERE id = $1::uuid`, tokenID); err != nil {
+			(principal_id, client_id, action, resource_type, resource_id, result, request_id)
+			SELECT principal_id, id, 'device.refresh_replay', 'client_token', id, 'revoked', $2
+			FROM client_tokens WHERE id = $1::uuid`, tokenID, requestid.From(ctx)); err != nil {
 			return DeviceTokens{}, err
 		}
 		if err := tx.Commit(ctx); err != nil {
@@ -305,9 +285,9 @@ func (s *DeviceAuthStore) RefreshDevice(ctx context.Context, refresh string) (De
 		return DeviceTokens{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_events
-		(principal_id, client_id, action, resource_type, resource_id, result)
-		SELECT principal_id, id, 'device.refresh', 'client_token', id, 'success'
-		FROM client_tokens WHERE id = $1::uuid`, tokenID); err != nil {
+		(principal_id, client_id, action, resource_type, resource_id, result, request_id)
+		SELECT principal_id, id, 'device.refresh', 'client_token', id, 'success', $2
+		FROM client_tokens WHERE id = $1::uuid`, tokenID, requestid.From(ctx)); err != nil {
 		return DeviceTokens{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {
@@ -325,7 +305,7 @@ func (s *DeviceAuthStore) ListDevices(ctx context.Context) ([]DeviceClient, erro
 		JOIN client_token_spaces cts ON cts.token_id = ct.id
 		JOIN spaces s ON s.id = cts.space_id
 		WHERE p.name = 'owner' AND s.name = 'personal'
-		ORDER BY ct.created_at DESC LIMIT 100`)
+		ORDER BY ct.created_at DESC`)
 	if err != nil {
 		return nil, err
 	}
@@ -366,8 +346,10 @@ func (s *DeviceAuthStore) RevokeDevice(ctx context.Context, id string) error {
 		WHERE token_id = $1::uuid`, id); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO audit_events (action, resource_type, resource_id, result)
-		VALUES ('device.revoke', 'client_token', $1::uuid, 'success')`, id); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO audit_events
+		(principal_id, client_id, action, resource_type, resource_id, result, request_id)
+		SELECT principal_id, id, 'device.revoke', 'client_token', id, 'success', $2
+		FROM client_tokens WHERE id = $1::uuid`, id, requestid.From(ctx)); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

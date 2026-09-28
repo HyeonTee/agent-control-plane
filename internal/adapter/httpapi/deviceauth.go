@@ -18,21 +18,12 @@ import (
 	"strings"
 	"time"
 
+	appdevice "github.com/HyeonTee/agent-control-plane/internal/application/deviceauth"
 	deviceauth "github.com/HyeonTee/agent-control-plane/internal/domain/deviceauth"
 	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
 )
 
 const deviceClientID = "agent-control-plane"
-
-type DeviceAuthBackend interface {
-	StartDevice(context.Context, string, []string) (deviceauth.Authorization, error)
-	FindDevice(context.Context, string) (deviceauth.Authorization, error)
-	DecideDevice(context.Context, string, bool) error
-	ExchangeDevice(context.Context, string) (deviceauth.Tokens, error)
-	RefreshDevice(context.Context, string) (deviceauth.Tokens, error)
-	ListDevices(context.Context) ([]deviceauth.Client, error)
-	RevokeDevice(context.Context, string) error
-}
 
 type DeviceAuthConfig struct {
 	PublicURL    string
@@ -42,20 +33,21 @@ type DeviceAuthConfig struct {
 }
 
 type DeviceAuthHandler struct {
-	backend DeviceAuthBackend
+	backend *appdevice.Service
 	config  DeviceAuthConfig
 	client  *http.Client
 	key     []byte
 }
 
-func NewDeviceAuthHandler(backend DeviceAuthBackend, cfg DeviceAuthConfig, client *http.Client) (*DeviceAuthHandler, error) {
+func NewDeviceAuthHandler(backend *appdevice.Service, cfg DeviceAuthConfig, client *http.Client) (*DeviceAuthHandler, error) {
 	base, err := url.Parse(cfg.PublicURL)
 	if backend == nil || err != nil || base.Host == "" || (base.Scheme != "https" && base.Scheme != "http") ||
 		base.Path != "" || base.RawQuery != "" || base.Fragment != "" || cfg.ClientID == "" || cfg.ClientSecret == "" || cfg.OwnerID <= 0 {
 		return nil, errors.New("invalid device authorization configuration")
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 8 * time.Second}
+		client = &http.Client{Timeout: 8 * time.Second,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	}
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {

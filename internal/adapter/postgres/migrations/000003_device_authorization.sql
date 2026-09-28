@@ -1,4 +1,5 @@
 CREATE TABLE device_authorizations (
+    id uuid NOT NULL DEFAULT gen_random_uuid() UNIQUE,
     device_code_digest bytea PRIMARY KEY,
     user_code_digest bytea NOT NULL UNIQUE,
     client_label text NOT NULL CHECK (char_length(client_label) BETWEEN 1 AND 120),
@@ -27,4 +28,3 @@ CREATE TABLE device_refresh_used (
     used_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX device_refresh_used_token_idx ON device_refresh_used(token_id);
-CREATE INDEX device_refresh_used_age_idx ON device_refresh_used(used_at);

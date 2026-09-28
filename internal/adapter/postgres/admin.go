@@ -11,6 +11,7 @@ import (
 	"time"
 
 	model "github.com/HyeonTee/agent-control-plane/internal/domain/work"
+	"github.com/HyeonTee/agent-control-plane/internal/requestid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -153,9 +154,9 @@ func insertToken(ctx context.Context, tx pgx.Tx, principalID, spaceID, name stri
 		return IssuedToken{}, err
 	}
 	if _, err := tx.Exec(ctx, `INSERT INTO audit_events
-		(principal_id, client_id, action, resource_type, resource_id, result)
-		VALUES ($1::uuid, $2::uuid, 'token.create', 'client_token', $2::uuid, 'success')`,
-		principalID, issued.ClientID); err != nil {
+		(principal_id, client_id, action, resource_type, resource_id, result, request_id)
+		VALUES ($1::uuid, $2::uuid, 'token.create', 'client_token', $2::uuid, 'success', $3)`,
+		principalID, issued.ClientID, requestid.From(ctx)); err != nil {
 		return IssuedToken{}, err
 	}
 	return issued, nil

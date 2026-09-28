@@ -16,6 +16,7 @@ import (
 
 	"github.com/HyeonTee/agent-control-plane/internal/adapter/httpapi"
 	"github.com/HyeonTee/agent-control-plane/internal/adapter/postgres"
+	appdevice "github.com/HyeonTee/agent-control-plane/internal/application/deviceauth"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -38,7 +39,7 @@ func (f fakeGitHubTransport) RoundTrip(request *http.Request) (*http.Response, e
 }
 
 func TestGitHubApprovalRejectsWrongStateAndUnlistedOwner(t *testing.T) {
-	auth, err := httpapi.NewDeviceAuthHandler(postgres.NewDeviceAuthStore(nil), httpapi.DeviceAuthConfig{
+	auth, err := httpapi.NewDeviceAuthHandler(appdevice.New(postgres.NewDeviceAuthStore(nil)), httpapi.DeviceAuthConfig{
 		PublicURL: "http://localhost:8080", ClientID: "test-github-app", ClientSecret: "test-secret", OwnerID: 42,
 	}, &http.Client{Transport: fakeGitHubTransport{userID: 43}})
 	if err != nil {
@@ -114,7 +115,7 @@ func TestDeviceAuthorizationRequiresBrowserApprovalAndRotatesRefresh(t *testing.
 		t.Fatal(err)
 	}
 	var server *httptest.Server
-	auth, err := httpapi.NewDeviceAuthHandler(postgres.NewDeviceAuthStore(pool), httpapi.DeviceAuthConfig{
+	auth, err := httpapi.NewDeviceAuthHandler(appdevice.New(postgres.NewDeviceAuthStore(pool)), httpapi.DeviceAuthConfig{
 		PublicURL: "http://localhost:8080", ClientID: "test-github-app", ClientSecret: "test-secret", OwnerID: 42,
 	}, &http.Client{Transport: fakeGitHubTransport{userID: 42}})
 	if err != nil {
@@ -214,6 +215,11 @@ func TestDeviceAuthorizationRequiresBrowserApprovalAndRotatesRefresh(t *testing.
 	if approved.StatusCode != 200 {
 		t.Fatalf("approval = %d", approved.StatusCode)
 	}
+	var approvalRequestID string
+	if err := pool.QueryRow(ctx, `SELECT request_id FROM audit_events
+		WHERE action = 'device.approved'`).Scan(&approvalRequestID); err != nil || approvalRequestID == "" {
+		t.Fatalf("approval audit omitted request ID: %q, %v", approvalRequestID, err)
+	}
 	tokenResponse, tokens := form("/oauth/token", exchange)
 	if tokenResponse.StatusCode != 200 || tokens["access_token"] == "" || tokens["refresh_token"] == "" {
 		t.Fatalf("exchange = %d %v", tokenResponse.StatusCode, tokens)
@@ -246,6 +252,9 @@ func TestDeviceAuthorizationRequiresBrowserApprovalAndRotatesRefresh(t *testing.
 	}
 	if apiGet(access) != 401 || apiGet(second["access_token"].(string)) != 200 {
 		t.Fatal("access token rotation did not replace old token")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE device_refresh_used SET used_at = now() - interval '91 days'`); err != nil {
+		t.Fatal(err)
 	}
 	replayed, data := form("/oauth/token", refreshForm)
 	if replayed.StatusCode != 400 || data["error"] != "invalid_grant" {

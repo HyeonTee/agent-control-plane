@@ -19,9 +19,11 @@ The Hub must not store or receive:
 
 - cloud access keys or session credentials;
 - kubeconfig files or Kubernetes tokens;
-- Git hosting credentials;
+- Git repository access credentials, such as personal access tokens or SSH keys;
 - LLM provider credentials used by local agents;
 - credentials copied from command output.
+
+The browser login callback briefly receives a GitHub OAuth token with [`read:user` scope](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps) to resolve the approver's numeric user ID. It stays in process memory for that request and is not stored, logged, or shared with an agent. This scope grants profile access, not repository access.
 
 The Hub instance role grants access only to the Hub's own infrastructure.
 
@@ -120,6 +122,8 @@ request_id
 timestamp
 redacted metadata
 ```
+
+Before a device token is issued, its approval or denial event has no client ID; it records the GitHub-verified principal, authorization request ID, and HTTP request ID instead.
 
 The actor and client ID are derived from authentication. A caller-provided value such as `codex` or `claude` may be recorded as client metadata but is never trusted as identity. The current implementation records token changes, successful writes and context reads, and failed authenticated HTTP operations in the database with generated request IDs. Invalid token attempts are logged without the token value. Audit records never store request or response bodies or bearer tokens.
 

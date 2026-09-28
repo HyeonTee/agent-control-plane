@@ -46,6 +46,23 @@ class CredentialBridgeTest(unittest.TestCase):
             self.assertEqual(stat.S_IMODE(bridge.CREDS.stat().st_mode), 0o600)
             self.assertEqual(stat.S_IMODE(bridge.CONFIG_DIR.stat().st_mode), 0o700)
 
+    def test_refresh_replaces_both_credentials(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            bridge.CONFIG_DIR = Path(temporary) / "agent-control-plane"
+            bridge.CREDS = bridge.CONFIG_DIR / "credentials.json"
+            bridge.LOCK = bridge.CONFIG_DIR / ".lock"
+            bridge.prepare_dir()
+            original_form = bridge.form
+            bridge.form = lambda _path, _values: (200,
+                b'{"access_token":"new-access","refresh_token":"new-refresh","expires_in":900}')
+            try:
+                result = bridge.refresh_credentials({"refresh_token": "old-refresh"})
+            finally:
+                bridge.form = original_form
+            self.assertEqual(result["access_token"], "new-access")
+            self.assertEqual(result["refresh_token"], "new-refresh")
+            self.assertEqual(bridge.read_private(bridge.CREDS)["refresh_token"], "new-refresh")
+
 
 if __name__ == "__main__":
     unittest.main()

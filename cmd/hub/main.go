@@ -16,6 +16,7 @@ import (
 
 	"github.com/HyeonTee/agent-control-plane/internal/adapter/httpapi"
 	"github.com/HyeonTee/agent-control-plane/internal/adapter/postgres"
+	appdevice "github.com/HyeonTee/agent-control-plane/internal/application/deviceauth"
 	"github.com/HyeonTee/agent-control-plane/internal/config"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -133,7 +134,7 @@ func run() error {
 	}
 	var deviceAuth *httpapi.DeviceAuthHandler
 	if cfg.GitHubClientID != "" {
-		deviceAuth, err = httpapi.NewDeviceAuthHandler(postgres.NewDeviceAuthStore(pool), httpapi.DeviceAuthConfig{
+		deviceAuth, err = httpapi.NewDeviceAuthHandler(appdevice.New(postgres.NewDeviceAuthStore(pool)), httpapi.DeviceAuthConfig{
 			PublicURL: cfg.PublicURL, ClientID: cfg.GitHubClientID,
 			ClientSecret: cfg.GitHubClientSecret, OwnerID: cfg.GitHubOwnerID,
 		}, nil)
