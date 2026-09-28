@@ -103,7 +103,7 @@ Downloading a package does not authorize execution. The agent integration or opt
 - S3 buckets block public access and use encryption at rest.
 - Sensitive fields are excluded from logs and audit metadata.
 - Sensitive context responses use `Cache-Control: no-store`, and proxy logs never record authorization headers or request bodies.
-- Request bodies have a 64 KiB limit. Unexpected fields and unsupported content types are rejected. The prepared production CloudFront stack disables caching and attaches a per-IP WAF rate rule; it must be applied and verified before public client tokens are issued.
+- Request bodies have a 64 KiB limit. Unexpected fields and unsupported content types are rejected. The production CloudFront stack disables caching and attaches a per-IP WAF rate rule.
 - Browser cross-origin access is disabled unless a specific trusted origin and credential flow are designed.
 
 ## Audit
@@ -125,7 +125,7 @@ The actor and client ID are derived from authentication. A caller-provided value
 
 ## Backup and recovery
 
-Automated backup is part of the MVP because the Hub exists to preserve continuity. The prepared EC2 deployment includes nightly S3 dumps, weekly isolated restore checks, and an immediate backup/restore check during first deployment; these are not live until that deployment is applied.
+Automated backup is part of the MVP because the Hub exists to preserve continuity. The EC2 deployment includes nightly S3 dumps and weekly isolated restore checks. The first deployment uploaded an archive and verified a disposable restore; scheduled runs still need operational monitoring.
 
 - daily PostgreSQL dump to a private S3 bucket;
 - object lifecycle retention;

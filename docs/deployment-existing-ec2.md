@@ -24,4 +24,4 @@ For an actual recovery, stop the Hub writer, preserve the damaged database for i
 
 ## Current state
 
-The production files are prepared but have not been applied to AWS. Local development continues to use `compose.yaml` bound to `127.0.0.1` and its own password.
+The production stack was applied on 2026-09-24. The manual deployment run [35972849762](https://github.com/HyeonTee/agent-control-plane/actions/runs/35972849762) built and deployed the ARM64 image, uploaded `backups/hub-20260924T080646Z.dump`, restored it into a disposable database, and passed public HTTPS readiness. The first archive had two migrations and no tasks or checkpoints, as expected for an empty production database. On 2026-09-28, public `/ready` returned 204, an unauthenticated task request returned 401, `/openapi.json` returned 200, and the Justice site returned 200. Owner bootstrap and a cross-computer authenticated client check remain to be done before storing real work in production. Local development continues to use `compose.yaml` bound to `127.0.0.1` and its own password.
