@@ -23,6 +23,6 @@ compose exec -T db createdb -U hub hub_restore_check
 CREATED=1
 compose exec -T db pg_restore -U hub -d hub_restore_check --exit-on-error < "$WORK/restore.dump"
 COUNTS="$(compose exec -T db psql -U hub -d hub_restore_check -Atc \
-  'SELECT (SELECT count(*) FROM schema_migrations), (SELECT count(*) FROM tasks), (SELECT count(*) FROM checkpoints)')"
+  'SELECT (SELECT count(*) FROM schema_migrations), (SELECT count(*) FROM tasks), (SELECT count(*) FROM checkpoints), (SELECT count(*) FROM work_sessions), (SELECT count(*) FROM session_entries)')"
 test -n "$COUNTS"
-echo "restore verified: $KEY; migrations,tasks,checkpoints=$COUNTS"
+echo "restore verified: $KEY; migrations,tasks,checkpoints,sessions,entries=$COUNTS"
