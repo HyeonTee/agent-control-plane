@@ -186,10 +186,11 @@ The first deployment target is the existing EC2 instance described in [the deplo
 - [Architecture](docs/architecture.md)
 - [Domain model](docs/domain-model.md)
 - [Work discovery and session history](docs/work-discovery.md)
+- [Production cross-agent handoff](docs/production-handoff.md)
 - [Security and data boundaries](docs/security.md)
 - [Implementation roadmap](docs/roadmap.md)
 - [Architecture decision records](docs/adr/README.md)
 
 ## Status
 
-Work continuity and discovery are implemented: scoped tokens, spaces, projects, task discovery and overviews, task-scoped sessions, paged session entries, checkpoints, handoffs, optimistic versions, idempotent retries, and read/write audit events. PostgreSQL integration tests cover cross-space isolation and pagination. The Hub is deployed at `https://agent.gwinam.com` on the existing EC2 host with HTTPS, rate limiting, and a verified initial backup restore. Production owner bootstrap and a cross-computer authenticated agent check remain before storing real work there.
+Work continuity and discovery are implemented: scoped tokens, spaces, projects, task discovery and overviews, task-scoped sessions, paged session entries, checkpoints, handoffs, optimistic versions, idempotent retries, and read/write audit events. PostgreSQL integration tests cover cross-space isolation and pagination. The Hub is deployed at `https://agent.gwinam.com` with HTTPS and rate limiting. The first work history was stored in production; Claude Code independently read it and authored a follow-up checkpoint with a separate client token. A non-empty database backup was restored and verified. A physical second-computer check and full EC2 rebuild drill remain operational follow-ups.

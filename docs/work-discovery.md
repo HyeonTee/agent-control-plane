@@ -78,4 +78,4 @@ This feature is deferred until session histories are long enough to justify it. 
 4. A token for another space cannot discover the task or its sessions.
 5. The existing first task and its checkpoints remain readable after migration as pre-session history.
 
-The local Hub implements this discovery and session flow. Cross-computer agent integration and public deployment still need separate verification.
+The production Hub implements this discovery and session flow. Claude Code used a separate client token to discover and continue the first production task through the public API; that test ran on the same computer as Codex. A physical second-computer check remains separate.
